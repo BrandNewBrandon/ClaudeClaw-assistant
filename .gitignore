@@ -1,5 +1,7 @@
 # Secrets
 config/config.json
+*.env
+*.secret
 
 # Personal agent data
 archived_agents/
