@@ -231,7 +231,7 @@ On a Mac, make sure you have:
 
 The macOS system `python3` may be too old for this project.
 
-The validated working path on Brandon’s MacBook Pro was:
+The validated working path on macOS was:
 - install Homebrew `python@3.12`
 - create a project-local `.venv`
 - run install/tests/runtime commands through that venv
@@ -414,8 +414,3 @@ Manual testing is still useful for:
 - Claude CLI execution
 - installed `assistant start/status/stop` behavior
 
-## Temporary project path
-
-`C:\Users\ace09\Projects\assistant-runtime`
-
-Rename later once the project gets a real name.
