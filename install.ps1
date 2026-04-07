@@ -1,0 +1,143 @@
+# install.ps1 — one-command installer for assistant-runtime (Windows)
+#
+# Usage (from PowerShell in the project folder):
+#   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+#   .\install.ps1
+#
+# What it does:
+#   1. Checks Python 3.11+
+#   2. Creates .venv if it doesn't exist
+#   3. Installs the package in editable mode
+#   4. Adds .venv\Scripts to the user PATH (permanent, one time)
+#   5. Runs 'assistant init' to complete setup
+#Requires -Version 5.1
+$ErrorActionPreference = 'Stop'
+
+$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Venv = Join-Path $ProjectRoot '.venv'
+$VenvScripts = Join-Path $Venv 'Scripts'
+$PythonMinMinor = 11
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+function Write-Ok   { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Green }
+function Write-Warn { param($msg) Write-Host "  [!]  $msg" -ForegroundColor Yellow }
+function Write-Fail { param($msg) Write-Host "  [X]  $msg" -ForegroundColor Red }
+function Write-Step { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
+
+Write-Host ""
+Write-Host "╔══════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║      assistant-runtime  ·  Installer (Windows)  ║" -ForegroundColor Cyan
+Write-Host "╚══════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host ""
+
+# ── Step 1: Find Python ──────────────────────────────────────────────────────
+Write-Step "Step 1 — Checking Python"
+
+$PythonExe = $null
+$Candidates = @('python3.13', 'python3.12', 'python3.11', 'python3', 'python')
+
+foreach ($candidate in $Candidates) {
+    $found = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($found) {
+        try {
+            $major = & $candidate -c 'import sys; print(sys.version_info.major)' 2>$null
+            $minor = & $candidate -c 'import sys; print(sys.version_info.minor)' 2>$null
+            if ([int]$major -eq 3 -and [int]$minor -ge $PythonMinMinor) {
+                $PythonExe = $candidate
+                break
+            }
+        } catch {}
+    }
+}
+
+if (-not $PythonExe) {
+    Write-Fail "Python 3.$PythonMinMinor+ not found."
+    Write-Host ""
+    Write-Host "  Download from: https://www.python.org/downloads/"
+    Write-Host "  Make sure to check 'Add Python to PATH' during install."
+    Write-Host ""
+    exit 1
+}
+
+$PythonVersion = & $PythonExe --version 2>&1
+Write-Ok "Found $PythonVersion ($PythonExe)"
+
+# ── Step 2: Check claude CLI ──────────────────────────────────────────────────
+Write-Step "Step 2 — Checking prerequisites"
+
+$claudeFound = Get-Command claude -ErrorAction SilentlyContinue
+if ($claudeFound) {
+    Write-Ok "claude CLI found"
+} else {
+    Write-Warn "claude CLI not found in PATH"
+    Write-Host "       Install from: https://claude.ai/code"
+    Write-Host "       You can install it after setup and before running 'assistant start'."
+}
+
+# ── Step 3: Create venv ───────────────────────────────────────────────────────
+Write-Step "Step 3 — Setting up virtual environment"
+
+$VenvPython = Join-Path $VenvScripts 'python.exe'
+if ((Test-Path $Venv) -and (Test-Path $VenvPython)) {
+    Write-Ok "Virtual environment already exists at $Venv"
+} else {
+    Write-Host "  Creating .venv..."
+    & $PythonExe -m venv $Venv
+    Write-Ok "Created .venv"
+}
+
+# ── Step 4: Install package ───────────────────────────────────────────────────
+Write-Step "Step 4 — Installing assistant-runtime"
+
+& $VenvPython -m pip install --quiet --upgrade pip
+& $VenvPython -m pip install --quiet -e $ProjectRoot
+Write-Ok "Installed assistant-runtime (editable mode)"
+
+# ── Step 5: Add to PATH ───────────────────────────────────────────────────────
+Write-Step "Step 5 — Adding 'assistant' to PATH"
+
+$currentUserPath = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+if ($currentUserPath -like "*$VenvScripts*") {
+    Write-Ok "PATH already contains $VenvScripts — skipping"
+} else {
+    $newPath = "$VenvScripts;$currentUserPath"
+    [System.Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+    Write-Ok "Added $VenvScripts to your user PATH (permanent)"
+    Write-Host "  This takes effect in new terminal windows."
+}
+
+# Also add to current session so assistant init works immediately
+$env:PATH = "$VenvScripts;$env:PATH"
+
+# ── Step 6: Verify ────────────────────────────────────────────────────────────
+Write-Step "Step 6 — Verifying install"
+
+$AssistantExe = Join-Path $VenvScripts 'assistant.exe'
+if (Get-Command assistant -ErrorAction SilentlyContinue) {
+    $assistantPath = (Get-Command assistant).Source
+    Write-Ok "assistant command available at $assistantPath"
+    $AssistantCmd = 'assistant'
+} elseif (Test-Path $AssistantExe) {
+    Write-Ok "assistant found at $AssistantExe"
+    $AssistantCmd = $AssistantExe
+} else {
+    Write-Warn "Could not find 'assistant' in PATH for this session — using full path."
+    $AssistantCmd = $AssistantExe
+}
+
+# ── Step 7: Run init ──────────────────────────────────────────────────────────
+Write-Step "Step 7 — First-time setup"
+Write-Host ""
+Write-Host "  Installation complete! Launching setup wizard..."
+Write-Host ""
+Start-Sleep -Milliseconds 500
+
+& $AssistantCmd init
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "  Installation complete." -ForegroundColor Green
+Write-Host ""
+Write-Host "  The 'assistant' command is now available in new terminal windows."
+Write-Host "  Open a new PowerShell window and run:  assistant start"
+Write-Host ""

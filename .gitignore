@@ -1,0 +1,24 @@
+# Secrets
+config/config.json
+
+# Personal agent data
+archived_agents/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Editor
+.claude/
+.vscode/
+.idea/

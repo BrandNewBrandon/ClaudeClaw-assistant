@@ -1,0 +1,40 @@
+{
+  "accounts": {
+    "primary": {
+      "platform": "telegram",
+      "token": "REPLACE_ME",
+      "allowed_chat_ids": [
+        "REPLACE_ME"
+      ]
+    },
+    "builder-bot": {
+      "platform": "telegram",
+      "token": "REPLACE_ME",
+      "allowed_chat_ids": [
+        "REPLACE_ME"
+      ]
+    }
+  },
+  "routing": {
+    "primary": {
+      "default_agent": "main",
+      "chat_agent_map": {
+        "REPLACE_CHAT_ID": "main"
+      }
+    },
+    "builder-bot": {
+      "default_agent": "builder",
+      "chat_agent_map": {
+        "REPLACE_CHAT_ID": "builder"
+      }
+    }
+  },
+  "default_agent": "main",
+  "claude_timeout_seconds": 300,
+  "telegram_poll_timeout_seconds": 30,
+  "typing_interval_seconds": 4,
+  "claude_working_directory_mode": "agent_dir",
+  "model_provider": "claude-code",
+  "claude_model": "sonnet",
+  "claude_effort": "medium"
+}
