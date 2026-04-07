@@ -539,6 +539,12 @@ class AssistantRouter:
                 except OSError:
                     pass
 
+        # __SILENT__ token: agent chose to suppress the reply
+        is_silent = reply.strip() == "__SILENT__"
+        if is_silent:
+            already_sent = True
+            LOGGER.info("Silent reply suppressed for chat_id=%s agent=%s", message.chat_id, active_agent)
+
         reply_send_started = time.monotonic()
         if not already_sent:
             channel.send_message(message.chat_id, reply)
@@ -652,7 +658,7 @@ class AssistantRouter:
         )
 
         tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
-        skill_context = self._plugin_registry.get_context_text() if self._plugin_registry else ""
+        skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         tool_results: list[str] = []
         last_output = ""
         last_session_id: str | None = None
@@ -779,7 +785,7 @@ class AssistantRouter:
         )
 
         tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
-        skill_context = self._plugin_registry.get_context_text() if self._plugin_registry else ""
+        skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         require_tool = is_obvious_web_request(message_text)
 
         # Send the initial ▌ placeholder and capture its message_id
@@ -900,11 +906,19 @@ class AssistantRouter:
                     is_tool_response[0] = False
                     continue
                 # Final answer — do a clean last edit (no cursor)
-                try:
-                    channel.edit_message(chat_id, message_id, last_output)
-                except Exception:
-                    pass
-                LOGGER.info("Streaming: final reply agent=%s iteration=%s", active_agent, iteration)
+                if last_output.strip() == "__SILENT__":
+                    # Agent chose to suppress — delete the placeholder
+                    try:
+                        channel.edit_message(chat_id, message_id, "(done)")
+                    except Exception:
+                        pass
+                    LOGGER.info("Streaming: silent reply suppressed agent=%s", active_agent)
+                else:
+                    try:
+                        channel.edit_message(chat_id, message_id, last_output)
+                    except Exception:
+                        pass
+                    LOGGER.info("Streaming: final reply agent=%s iteration=%s", active_agent, iteration)
                 return last_output, last_session_id
 
             # Tool call: show friendly status, execute, continue loop

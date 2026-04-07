@@ -205,25 +205,32 @@ Each session you start fresh. The workspace files are your memory. Read them.
 _DEFAULT_USER_MD = """\
 # USER.md
 
-Fill in details about the user here so the agent can better serve them.
-
-Examples:
-- Name/preferred name
-- Timezone / location
-- Areas of work or interest
-- How they prefer to communicate
+(This file is updated by the assistant as it learns about you.)
 """
 
 _DEFAULT_MEMORY_MD = """\
 # MEMORY.md
 
-Long-term memory for this agent. Key facts, preferences, and context accumulate here over time.
+(Long-term notes maintained by the assistant. Important facts, decisions, and context go here.)
 """
 
 _DEFAULT_TOOLS_MD = """\
 # TOOLS.md
 
 Notes about tools or local integrations available to this agent.
+"""
+
+_DEFAULT_BOOTSTRAP_MD = """\
+# BOOTSTRAP.md
+
+This is your first conversation. You're meeting the user for the first time.
+
+Don't list your capabilities. Don't ask a bunch of setup questions.
+Just be natural — say hello, maybe ask their name or what they're working on.
+Pay attention to what they share and start building USER.md from it.
+
+Once you've had a real exchange, use write_file to delete this file
+(write an empty string to BOOTSTRAP.md) — you don't need it anymore.
 """
 
 
@@ -239,6 +246,7 @@ def _scaffold_agent(agents_dir: Path, agent_name: str) -> None:
         "USER.md": _DEFAULT_USER_MD,
         "MEMORY.md": _DEFAULT_MEMORY_MD,
         "TOOLS.md": _DEFAULT_TOOLS_MD,
+        "BOOTSTRAP.md": _DEFAULT_BOOTSTRAP_MD,
     }
     for filename, content in files.items():
         path = agent_dir / filename
@@ -958,13 +966,62 @@ def _start_runtime(project_root: Path) -> int:
     return 1
 
 
+def _kill_orphan_processes() -> int:
+    """Find and kill orphan assistant-runtime processes when no PID file exists."""
+    killed = 0
+    try:
+        if os.name == "nt":
+            # Windows: use wmic to find python processes running app.main
+            result = subprocess.run(
+                ["wmic", "process", "where", "name='python.exe'", "get", "processid,commandline"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                if "app.main" in line:
+                    parts = line.strip().split()
+                    if parts:
+                        try:
+                            orphan_pid = int(parts[-1])
+                            subprocess.run(["taskkill", "/PID", str(orphan_pid), "/T", "/F"],
+                                           check=False, capture_output=True, text=True)
+                            print(f"Killed orphan process (PID {orphan_pid}).")
+                            killed += 1
+                        except (ValueError, OSError):
+                            pass
+        else:
+            # Unix: use pgrep to find app.main processes
+            result = subprocess.run(
+                ["pgrep", "-f", "app.main"],
+                capture_output=True, text=True, timeout=5,
+            )
+            my_pid = os.getpid()
+            for line in result.stdout.strip().splitlines():
+                try:
+                    orphan_pid = int(line.strip())
+                    if orphan_pid == my_pid:
+                        continue
+                    os.kill(orphan_pid, signal.SIGTERM)
+                    print(f"Killed orphan process (PID {orphan_pid}).")
+                    killed += 1
+                except (ValueError, OSError):
+                    pass
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass  # pgrep/wmic not available or timed out — silently skip
+    return killed
+
+
 def _stop_runtime() -> int:
     _cleanup_stale_runtime_files()
     pid_path = get_runtime_pid_file()
     lock_path = get_runtime_lock_file()
     pid = _read_pid(pid_path)
     if pid is None:
-        print("assistant-runtime is not running (no PID file found).")
+        # No PID file — check for orphan processes before giving up
+        orphans = _kill_orphan_processes()
+        if orphans:
+            print(f"Cleaned up {orphans} orphan process(es).")
+        else:
+            print("assistant-runtime is not running (no PID file found).")
         _safe_unlink(lock_path)
         return 0
     if _is_process_running(pid):

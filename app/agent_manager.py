@@ -64,6 +64,7 @@ class AgentManager:
         self._write(agent_dir / "USER.md", self._user_md_template())
         self._write(agent_dir / "MEMORY.md", self._memory_md_template(cleaned))
         self._write(agent_dir / "TOOLS.md", self._tools_md_template(cleaned))
+        self._write(agent_dir / "BOOTSTRAP.md", self._bootstrap_md_template())
         self._write(agent_dir / "agent.json", self._agent_json_template(cleaned))
         self._write(agent_dir / "memory" / "README.md", f"Daily notes for {cleaned} go here, one file per date.\n")
         self._write(agent_dir / "sessions" / "README.md", f"Optional per-agent Claude session tracking files for {cleaned} can live here.\n")
@@ -186,14 +187,22 @@ class AgentManager:
 
     @staticmethod
     def _user_md_template() -> str:
-        return "# USER.md\n\n- Name: B\n- Relationship: primary human\n- Notes: fill in over time\n"
+        return "# USER.md\n\n(This file is updated by the assistant as it learns about you.)\n"
 
     @staticmethod
     def _memory_md_template(name: str) -> str:
+        return "# MEMORY.md\n\n(Long-term notes maintained by the assistant. Important facts, decisions, and context go here.)\n"
+
+    @staticmethod
+    def _bootstrap_md_template() -> str:
         return (
-            "# MEMORY.md\n\n"
-            f"Long-term memory for {name}.\n\n"
-            "Add durable facts, preferences, decisions, and context here.\n"
+            "# BOOTSTRAP.md\n\n"
+            "This is your first conversation. You're meeting the user for the first time.\n\n"
+            "Don't list your capabilities. Don't ask a bunch of setup questions.\n"
+            "Just be natural — say hello, maybe ask their name or what they're working on.\n"
+            "Pay attention to what they share and start building USER.md from it.\n\n"
+            "Once you've had a real exchange, use write_file to delete this file\n"
+            "(write an empty string to BOOTSTRAP.md) — you don't need it anymore.\n"
         )
 
     @staticmethod

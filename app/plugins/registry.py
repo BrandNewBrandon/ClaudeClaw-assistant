@@ -84,6 +84,33 @@ class PluginRegistry:
                 LOGGER.exception("Skill context_text error: %s", skill.name)
         return "\n\n".join(parts)
 
+    def get_relevant_context_text(self, message: str) -> str:
+        """Only include skill context for skills whose summary keywords match the message.
+
+        Falls back to full context if no skills match (so nothing is lost).
+        """
+        lowered = message.lower()
+        relevant: list[str] = []
+        for skill in self._available:
+            try:
+                keywords = skill.summary.lower().split()
+                if not keywords:
+                    # No summary defined — always include
+                    text = skill.context_text()
+                    if text and text.strip():
+                        relevant.append(text.strip())
+                    continue
+                if any(kw in lowered for kw in keywords):
+                    text = skill.context_text()
+                    if text and text.strip():
+                        relevant.append(text.strip())
+            except Exception:
+                LOGGER.exception("Skill context_text error: %s", skill.name)
+        # Fallback: if keyword filtering produced nothing, include all
+        if not relevant:
+            return self.get_context_text()
+        return "\n\n".join(relevant)
+
     # ── Status ────────────────────────────────────────────────────────────────
 
     def status_lines(self) -> list[str]:

@@ -22,6 +22,9 @@ class SkillBase:
     version: str = "1.0"
     #: One-line description shown in /skills output.
     description: str = ""
+    #: Keywords for on-demand context loading (space-separated).
+    #: If set, context_text() is only injected when the user message matches.
+    summary: str = ""
 
     # ── Core interface ────────────────────────────────────────────────────────
 
