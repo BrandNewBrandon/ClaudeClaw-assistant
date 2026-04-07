@@ -30,6 +30,30 @@ Write-Host "   assistant-runtime  -  Installer (Windows)    " -ForegroundColor C
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host ""
 
+# -- Guard: auto-relocate if run from a system directory ----------------------
+$systemRoots = @($env:SystemRoot, $env:ProgramFiles, ${env:ProgramFiles(x86)})
+foreach ($sysRoot in $systemRoots) {
+    if ($sysRoot -and $ProjectRoot.StartsWith($sysRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $SafeRoot = "C:\Users\$env:USERNAME\Projects\assistant-runtime"
+        Write-Host ""
+        Write-Host "  [!]  Installer is running from a system directory:" -ForegroundColor Yellow
+        Write-Host "       $ProjectRoot" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Copying project to: $SafeRoot" -ForegroundColor Cyan
+        New-Item -ItemType Directory -Force -Path $SafeRoot | Out-Null
+        robocopy $ProjectRoot $SafeRoot /E /NFL /NDL /NJH /NJS | Out-Null
+        Write-Host "  [OK] Copied." -ForegroundColor Green
+        Write-Host ""
+        Write-Host "  The original copy can be deleted once setup is complete." -ForegroundColor Yellow
+        Write-Host "  To remove it, run in an admin PowerShell:" -ForegroundColor Yellow
+        Write-Host "    Remove-Item -Recurse -Force `"$ProjectRoot`"" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Relaunching installer from the new location..." -ForegroundColor Cyan
+        Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$SafeRoot\install.ps1`"" -Wait
+        exit 0
+    }
+}
+
 # -- Step 1: Find Python ------------------------------------------------------
 Write-Step "Step 1 - Checking Python"
 

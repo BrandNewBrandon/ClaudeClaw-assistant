@@ -20,6 +20,10 @@ class ClaudeCodeRunner:
         if shutil.which("claude") is None:
             raise ModelRunnerError("`claude` CLI not found in PATH.")
 
+    def _claude_exe(self) -> str:
+        """Return the resolved claude executable path (handles .cmd on Windows)."""
+        return shutil.which("claude") or "claude"
+
     def run_prompt(
         self,
         prompt: str,
@@ -36,7 +40,7 @@ class ClaudeCodeRunner:
         use_json = session_id is not None
 
         command = [
-            "claude",
+            self._claude_exe(),
             "--print",
             "--output-format",
             "json" if use_json else "text",
@@ -115,8 +119,9 @@ class ClaudeCodeRunner:
         cwd = Path(working_directory)
 
         command = [
-            "claude",
+            self._claude_exe(),
             "--print",
+            "--verbose",
             "--output-format", "stream-json",
             "--include-partial-messages",
             "--permission-mode", "bypassPermissions",
