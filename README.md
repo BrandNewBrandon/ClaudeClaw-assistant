@@ -414,3 +414,26 @@ Manual testing is still useful for:
 - Claude CLI execution
 - installed `assistant start/status/stop` behavior
 
+## Installation
+
+**Prerequisites:**
+- Git → git-scm.com/download/win (Windows) or pre-installed on Mac
+- Python 3.12+ → python.org/downloads
+- Claude CLI → claude.ai/code
+
+**Mac/Linux:**
+```bash
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git
+cd assistant-runtime
+./install.sh
+```
+
+**Windows:**
+```
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git
+cd assistant-runtime
+Windows Install.bat
+```
+
+Then follow the setup prompts.
+
