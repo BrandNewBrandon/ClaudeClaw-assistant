@@ -3,8 +3,8 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from .base import BaseChannel, ChannelError, ChannelMessage
-from ..telegram_client import TelegramClient, TelegramError
+from .base import BaseChannel, ChannelCallback, ChannelError, ChannelMessage
+from ..telegram_client import TelegramCallback, TelegramClient, TelegramError, TelegramMessage
 
 
 class TelegramChannel(BaseChannel):
@@ -27,25 +27,36 @@ class TelegramChannel(BaseChannel):
 
     # ── BaseChannel ──────────────────────────────────────────────────────────
 
-    def get_updates(self) -> list[ChannelMessage]:
+    def get_updates(self) -> list[ChannelMessage | ChannelCallback]:
         try:
-            raw_messages = self._client.get_updates(offset=self._offset)
+            raw_updates = self._client.get_updates(offset=self._offset)
         except TelegramError as exc:
             raise ChannelError(str(exc)) from exc
 
-        results: list[ChannelMessage] = []
-        for msg in raw_messages:
-            self._offset = max(self._offset or 0, msg.update_id + 1)
-            results.append(
-                ChannelMessage(
-                    update_id=msg.update_id,
-                    chat_id=msg.chat_id,
-                    message_id=msg.message_id,
-                    text=msg.text,
-                    raw=msg.raw,
-                    image_path=msg.image_path,
+        results: list[ChannelMessage | ChannelCallback] = []
+        for update in raw_updates:
+            self._offset = max(self._offset or 0, update.update_id + 1)
+            if isinstance(update, TelegramCallback):
+                results.append(
+                    ChannelCallback(
+                        update_id=update.update_id,
+                        chat_id=update.chat_id,
+                        callback_id=update.callback_query_id,
+                        data=update.data,
+                        message_id=update.message_id,
+                    )
                 )
-            )
+            elif isinstance(update, TelegramMessage):
+                results.append(
+                    ChannelMessage(
+                        update_id=update.update_id,
+                        chat_id=update.chat_id,
+                        message_id=update.message_id,
+                        text=update.text,
+                        raw=update.raw,
+                        image_path=update.image_path,
+                    )
+                )
         return results
 
     def send_message(self, chat_id: str, text: str) -> None:
@@ -65,6 +76,20 @@ class TelegramChannel(BaseChannel):
             self._client.edit_message(chat_id, message_id, text)
         except TelegramError as exc:
             raise ChannelError(str(exc)) from exc
+
+    def send_message_with_buttons(
+        self, chat_id: str, text: str, buttons: list[list[dict[str, str]]]
+    ) -> int | None:
+        try:
+            return self._client.send_message_with_buttons(chat_id, text, buttons)
+        except TelegramError as exc:
+            raise ChannelError(str(exc)) from exc
+
+    def answer_callback(self, callback_id: str, text: str = "") -> None:
+        try:
+            self._client.answer_callback_query(callback_id, text)
+        except TelegramError:
+            pass
 
     def send_typing(self, chat_id: str) -> None:
         try:

@@ -28,15 +28,26 @@ class ChannelMessage:
     image_path: str | None = None
 
 
+@dataclass(frozen=True)
+class ChannelCallback:
+    """Surface-agnostic inline-button callback (e.g. Telegram callback_query)."""
+
+    update_id: int
+    chat_id: str
+    callback_id: str       # platform-specific callback ID for answering
+    data: str              # callback_data payload (e.g. "a:3f1c0a9e")
+    message_id: int = 0    # the message the button was on
+
+
 class BaseChannel(ABC):
     """Common interface all channel adapters must implement."""
 
     # ── Receiving ────────────────────────────────────────────────────────────
 
     @abstractmethod
-    def get_updates(self) -> list[ChannelMessage]:
+    def get_updates(self) -> list[ChannelMessage | ChannelCallback]:
         """Block until at least one message arrives (or a short timeout elapses)
-        and return all buffered messages.
+        and return all buffered messages and callbacks.
 
         Polling channels (Telegram) do one HTTP round-trip per call.
         Event-driven channels (Discord, Slack) drain an internal queue.
@@ -61,6 +72,19 @@ class BaseChannel(ABC):
 
         No-op on channels that do not support editing.
         """
+
+    def send_message_with_buttons(
+        self, chat_id: str, text: str, buttons: list[list[dict[str, str]]]
+    ) -> int | None:
+        """Send a message with inline action buttons (e.g. Approve / Deny).
+
+        Returns the message_id if supported, or ``None`` if the channel
+        does not support inline keyboards.
+        """
+        return None
+
+    def answer_callback(self, callback_id: str, text: str = "") -> None:
+        """Acknowledge an inline-button callback. No-op if unsupported."""
 
     def send_typing(self, chat_id: str) -> None:
         """Indicate the bot is typing. No-op if unsupported."""

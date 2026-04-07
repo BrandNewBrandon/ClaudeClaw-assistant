@@ -50,6 +50,9 @@ class AppConfig:
     consolidation_enabled: bool = True
     consolidation_keep_days: int = 3
     consolidation_hour: int = 2
+    # Semantic memory search (requires: pip install assistant-runtime[semantic])
+    semantic_search_enabled: bool = True
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     # Quiet hours (HH:MM 24-hour format, e.g. "22:00". Both None = disabled)
     quiet_hours_start: str | None = None
     quiet_hours_end: str | None = None
@@ -233,6 +236,8 @@ def load_config(config_path: str | Path) -> AppConfig:
         consolidation_enabled=bool(raw.get("consolidation_enabled", True)),
         consolidation_keep_days=int(raw.get("consolidation_keep_days", 3)),
         consolidation_hour=int(raw.get("consolidation_hour", 2)),
+        semantic_search_enabled=bool(raw.get("semantic_search_enabled", True)),
+        embedding_model=str(raw.get("embedding_model", "BAAI/bge-small-en-v1.5")),
         quiet_hours_start=_optional_string(raw, "quiet_hours_start"),
         quiet_hours_end=_optional_string(raw, "quiet_hours_end"),
         briefing_enabled=bool(raw.get("briefing_enabled", False)),

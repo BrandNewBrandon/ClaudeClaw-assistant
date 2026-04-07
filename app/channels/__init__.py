@@ -1,3 +1,3 @@
-from .base import BaseChannel, ChannelError, ChannelMessage
+from .base import BaseChannel, ChannelCallback, ChannelError, ChannelMessage
 
-__all__ = ["BaseChannel", "ChannelError", "ChannelMessage"]
+__all__ = ["BaseChannel", "ChannelCallback", "ChannelError", "ChannelMessage"]

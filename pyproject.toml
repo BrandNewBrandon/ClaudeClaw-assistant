@@ -13,9 +13,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-discord = ["discord.py>=2.0"]
-slack   = ["slack-sdk>=3.0"]
-all     = ["discord.py>=2.0", "slack-sdk>=3.0"]
+discord   = ["discord.py>=2.0"]
+slack     = ["slack-sdk>=3.0"]
+semantic  = ["fastembed>=0.4", "numpy>=1.26"]
+all       = ["discord.py>=2.0", "slack-sdk>=3.0", "fastembed>=0.4", "numpy>=1.26"]
 
 [project.scripts]
 assistant = "app.assistant_cli:main"

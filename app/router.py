@@ -12,7 +12,7 @@ from pathlib import Path
 from queue import Empty, Queue
 
 from .agent_config import AgentConfig, load_agent_config
-from .channels import BaseChannel, ChannelError, ChannelMessage
+from .channels import BaseChannel, ChannelCallback, ChannelError, ChannelMessage
 from .channels.factory import build_channel
 from .plugins import PluginRegistry, build_plugin_registry
 from .claude_runner import ClaudeCodeRunner
@@ -299,9 +299,12 @@ class AssistantRouter:
 
     def _poll_account_once(self, account_id: str, account_runtime: AccountRuntime) -> None:
         try:
-            messages = account_runtime.channel.get_updates()
-            for message in messages:
-                self._handle_message(account_id, message)
+            updates = account_runtime.channel.get_updates()
+            for update in updates:
+                if isinstance(update, ChannelCallback):
+                    self._handle_callback(account_id, update, account_runtime.channel)
+                else:
+                    self._handle_message(account_id, update)
         except ChannelError as exc:
             self._runtime_state.mark_error(str(exc))
             LOGGER.exception("Channel error for account=%s", account_id)
@@ -314,6 +317,63 @@ class AssistantRouter:
             return load_config(self._config_path)
         except ConfigError as exc:
             raise SystemExit(f"Configuration error: {exc}") from exc
+
+    def _handle_callback(self, account_id: str, callback: ChannelCallback, channel: BaseChannel) -> None:
+        """Handle an inline keyboard button press (e.g. Approve / Deny)."""
+        data = callback.data  # e.g. "a:3f1c0a9e" or "d:3f1c0a9e"
+        if ":" not in data:
+            channel.answer_callback(callback.callback_id, "Unknown action.")
+            return
+
+        action, approval_id = data.split(":", 1)
+        approved = action == "a"
+
+        result = self._approval_store.resolve_by_id(approval_id, approved=approved)
+        if result is None:
+            channel.answer_callback(callback.callback_id, "Approval expired or already handled.")
+            try:
+                channel.edit_message(callback.chat_id, callback.message_id, "(Expired)")
+            except Exception:
+                pass
+            return
+
+        key, command = result
+        surface = "telegram"
+        active_agent, _ = self._resolve_agent_for_chat(callback.chat_id, account_id=account_id)
+
+        if approved:
+            channel.answer_callback(callback.callback_id, "Command approved!")
+            LOGGER.info("Callback approved account=%s chat_id=%s command=%r", account_id, callback.chat_id, command)
+            working_dir = self._resolve_working_directory(active_agent)
+            try:
+                output = execute_shell_command(command, cwd=str(working_dir))
+            except Exception as exc:
+                output = f"Error: {exc}"
+            # Edit the approval message to show the result
+            result_text = f"Approved: {command}\n\nOutput:\n{output}" if output else f"Approved: {command}\n\n(no output)"
+            if len(result_text) > 4000:
+                result_text = result_text[:4000] + "..."
+            try:
+                channel.edit_message(callback.chat_id, callback.message_id, result_text)
+            except Exception:
+                channel.send_message(callback.chat_id, result_text)
+            self._memory.append_transcript(
+                surface=surface, account_id=account_id, chat_id=callback.chat_id,
+                direction="out", agent=active_agent,
+                message_text=result_text, metadata={"kind": "command_approved"},
+            )
+        else:
+            channel.answer_callback(callback.callback_id, "Command denied.")
+            LOGGER.info("Callback denied account=%s chat_id=%s", account_id, callback.chat_id)
+            try:
+                channel.edit_message(callback.chat_id, callback.message_id, "Command cancelled.")
+            except Exception:
+                channel.send_message(callback.chat_id, "Command cancelled.")
+            self._memory.append_transcript(
+                surface=surface, account_id=account_id, chat_id=callback.chat_id,
+                direction="out", agent=active_agent,
+                message_text="Command cancelled.", metadata={"kind": "command_denied"},
+            )
 
     def _handle_message(self, account_id: str, message: ChannelMessage) -> None:
         assert self._config is not None
@@ -644,13 +704,26 @@ class AssistantRouter:
         # Replace run_command with an approval-gated wrapper
         _approval_store = self._approval_store
         _surface, _account_id, _chat_id = surface, account_id, chat_id
-        _cwd = str(working_directory)
+        _channel = channel
 
         def _gated_run_command(args: dict) -> str:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
-            return _approval_store.request(_surface, _account_id, _chat_id, cmd)
+            message_text_out, approval_id = _approval_store.request(_surface, _account_id, _chat_id, cmd)
+            # Send inline keyboard buttons if the channel supports them
+            if _channel is not None:
+                try:
+                    buttons = [[
+                        {"text": "Approve", "callback_data": f"a:{approval_id}"},
+                        {"text": "Deny", "callback_data": f"d:{approval_id}"},
+                    ]]
+                    mid = _channel.send_message_with_buttons(_chat_id, message_text_out, buttons)
+                    if mid is not None:
+                        return "Waiting for user approval via inline buttons."
+                except Exception:
+                    pass  # fall through to plain text
+            return message_text_out
 
         tool_registry.register(
             ToolSpec("run_command", "Run a shell command and return its output. Use with care.", {"command": "shell command string to execute"}),
@@ -772,12 +845,25 @@ class AssistantRouter:
         _approval_store = self._approval_store
         _surface = ""  # surface not needed for the approval gating display here
         _chat_id = chat_id
+        _channel = channel
 
         def _gated_run_command(args: dict) -> str:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
-            return _approval_store.request(_surface, "", _chat_id, cmd)
+            message_text_out, approval_id = _approval_store.request(_surface, "", _chat_id, cmd)
+            if _channel is not None:
+                try:
+                    buttons = [[
+                        {"text": "Approve", "callback_data": f"a:{approval_id}"},
+                        {"text": "Deny", "callback_data": f"d:{approval_id}"},
+                    ]]
+                    mid = _channel.send_message_with_buttons(_chat_id, message_text_out, buttons)
+                    if mid is not None:
+                        return "Waiting for user approval via inline buttons."
+                except Exception:
+                    pass
+            return message_text_out
 
         tool_registry.register(
             ToolSpec("run_command", "Run a shell command and return its output.", {"command": "shell command string"}),

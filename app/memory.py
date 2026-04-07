@@ -31,6 +31,7 @@ class MemoryStore:
     def __init__(self, shared_dir: Path, agents_dir: Path) -> None:
         self._shared_dir = shared_dir
         self._agents_dir = agents_dir
+        self._embedding_indices: dict[str, "EmbeddingIndex"] = {}  # agent -> index
 
     def long_term_memory_path(self, agent: str) -> Path:
         return self._agents_dir / agent / "MEMORY.md"
@@ -41,7 +42,30 @@ class MemoryStore:
             return ""
         return path.read_text(encoding="utf-8").strip()
 
-    def find_relevant_memory(self, agent: str, query: str, *, limit: int = 4) -> list[str]:
+    def find_relevant_memory(self, agent: str, query: str, *, limit: int = 4, semantic: bool = True) -> list[str]:
+        """Find memory snippets relevant to *query*.
+
+        When ``semantic=True`` (default) and fastembed is installed, uses
+        embedding-based cosine similarity for much better recall.  Falls back
+        to keyword matching otherwise.
+        """
+        # Try semantic search first
+        if semantic:
+            try:
+                index = self._get_embedding_index(agent)
+                if index.size > 0:
+                    results = index.query(query, limit=limit)
+                    if results:
+                        return results
+                    # If semantic returned nothing, fall through to keyword
+            except Exception as exc:
+                LOGGER.debug("Semantic search unavailable for agent=%s: %s", agent, exc)
+
+        # Keyword fallback
+        return self._keyword_search(agent, query, limit=limit)
+
+    def _keyword_search(self, agent: str, query: str, *, limit: int = 4) -> list[str]:
+        """Original keyword-based memory search."""
         query_terms = self._keyword_terms(query)
         if not query_terms:
             return []
@@ -65,6 +89,32 @@ class MemoryStore:
             if len(results) >= limit:
                 break
         return results
+
+    def _get_embedding_index(self, agent: str) -> "EmbeddingIndex":
+        """Get or create the embedding index for an agent, building it if needed."""
+        from .embeddings import EmbeddingIndex, is_available
+
+        if not is_available():
+            raise ImportError("fastembed not installed")
+
+        if agent in self._embedding_indices:
+            return self._embedding_indices[agent]
+
+        index_dir = self._agents_dir / agent / "memory" / "embeddings"
+        index = EmbeddingIndex(agent, index_dir)
+
+        # If no saved index exists, build from current sources
+        if not (index_dir / "manifest.json").exists():
+            snippets: list[tuple[str, str]] = []
+            for source_text in self._memory_sources(agent):
+                for snippet in self._split_snippets(source_text):
+                    snippets.append(("memory", snippet))
+            if snippets:
+                index.build_from_sources(snippets)
+                LOGGER.info("Built embedding index for agent=%s with %d snippets", agent, len(snippets))
+
+        self._embedding_indices[agent] = index
+        return index
 
     def transcript_path(self, surface: str, chat_id: str, *, account_id: str = "primary") -> Path:
         return self._shared_dir / "transcripts" / f"{surface}-{account_id}-{chat_id}.jsonl"
@@ -205,6 +255,14 @@ class MemoryStore:
             if path.exists() and path.stat().st_size > 0:
                 handle.write("\n\n")
             handle.write(f"## {self._now_human()}\n{note}\n")
+
+        # Incrementally update the embedding index if available
+        try:
+            index = self._get_embedding_index(agent)
+            for snippet in self._split_snippets(note):
+                index.add_snippet("daily_note", snippet)
+        except Exception:
+            pass  # semantic indexing is best-effort
 
         return path
 

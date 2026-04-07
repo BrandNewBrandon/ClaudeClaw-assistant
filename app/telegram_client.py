@@ -27,6 +27,17 @@ class TelegramMessage:
     image_path: str | None = None  # temp file path if a photo was attached
 
 
+@dataclass(frozen=True)
+class TelegramCallback:
+    """Represents a Telegram callback_query (inline keyboard button press)."""
+    update_id: int
+    callback_query_id: str
+    chat_id: str
+    message_id: int
+    data: str
+    raw: dict[str, Any]
+
+
 class TelegramClient:
     def __init__(self, bot_token: str, poll_timeout_seconds: int = 30) -> None:
         self._base_url = f"https://api.telegram.org/bot{bot_token}"
@@ -34,18 +45,38 @@ class TelegramClient:
         self._poll_timeout_seconds = poll_timeout_seconds
         self._ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-    def get_updates(self, offset: int | None = None) -> list[TelegramMessage]:
+    def get_updates(self, offset: int | None = None) -> list[TelegramMessage | TelegramCallback]:
         payload: dict[str, Any] = {
             "timeout": self._poll_timeout_seconds,
-            "allowed_updates": ["message"],
+            "allowed_updates": ["message", "callback_query"],
         }
         if offset is not None:
             payload["offset"] = offset
 
         data = self._post_json("getUpdates", payload)
-        results: list[TelegramMessage] = []
+        results: list[TelegramMessage | TelegramCallback] = []
 
         for item in data:
+            # ── Callback query (inline keyboard button press) ──
+            callback_query = item.get("callback_query")
+            if callback_query:
+                cb_message = callback_query.get("message") or {}
+                cb_chat = cb_message.get("chat") or {}
+                cb_chat_id = str(cb_chat.get("id", "")).strip()
+                if cb_chat_id:
+                    results.append(
+                        TelegramCallback(
+                            update_id=int(item["update_id"]),
+                            callback_query_id=str(callback_query["id"]),
+                            chat_id=cb_chat_id,
+                            message_id=int(cb_message.get("message_id", 0)),
+                            data=callback_query.get("data", ""),
+                            raw=item,
+                        )
+                    )
+                continue
+
+            # ── Regular message ──
             message = item.get("message") or {}
             chat = message.get("chat") or {}
             chat_id = str(chat.get("id", "")).strip()
@@ -145,6 +176,32 @@ class TelegramClient:
             if "Too Many Requests" in msg or "message is not modified" in msg:
                 return
             raise
+
+    def send_message_with_buttons(self, chat_id: str, text: str, buttons: list[list[dict[str, str]]]) -> int:
+        """Send a message with an inline keyboard and return the message_id.
+
+        ``buttons`` is a list of rows, each row a list of
+        ``{"text": "...", "callback_data": "..."}`` dicts.
+        """
+        result = self._post_json(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": text or "(empty)",
+                "reply_markup": {"inline_keyboard": buttons},
+            },
+        )
+        return int(result["message_id"])
+
+    def answer_callback_query(self, callback_query_id: str, text: str = "") -> None:
+        """Acknowledge a callback query (dismisses the loading spinner on the button)."""
+        payload: dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        try:
+            self._post_json("answerCallbackQuery", payload)
+        except TelegramError:
+            pass  # non-critical — spinner just stays a bit longer
 
     def send_message(self, chat_id: str, text: str) -> None:
         cleaned = (text or "").strip()
