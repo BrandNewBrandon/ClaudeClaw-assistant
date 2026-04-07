@@ -92,9 +92,18 @@ Rewrote from a ruleset into a personality manifesto modeled on OpenClaw's SOUL.m
 ## Known Issues / TODO
 
 ### High priority
-- **`USER.md` is empty** — Avi Nuge knows nothing about Brandon. Filling this in
-  is the single highest-ROI improvement. Add: name, timezone, what you work on,
-  how you like to communicate. File: `agents/Avi Nuge/USER.md`
+- **USER.md onboarding flow** — USER.md should NOT be filled in manually.
+  The assistant should learn about the user organically and update USER.md itself.
+
+  **Design decision:** Add instructions to `_DEFAULT_AGENT_MD` in `assistant_cli.py`:
+  if USER.md is empty (just the template), introduce yourself and ask a few natural
+  questions. As you learn things, use `write_file` to update USER.md. Don't make it
+  feel like a form — let it happen conversationally.
+
+  **What we know:**
+  - `write_file` tool already exists in `tools.py` and can write any path
+  - No first-message detection exists in `router.py` — all messages same path
+  - AGENT.md is first in every prompt, so instructions there are always active
 
 - **Restart doesn't kill stale processes** — When there's no PID file,
   `assistant restart` starts a new process without stopping the old one.
