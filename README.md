@@ -432,7 +432,7 @@ cd assistant-runtime
 ```
 git clone https://github.com/BrandNewBrandon/assistant-runtime.git
 cd assistant-runtime
-Windows Install.bat
+& ".\Windows Install.bat"
 ```
 
 Then follow the setup prompts.
