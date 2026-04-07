@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore.add_argument("--as", dest="restored_name", default=None, help="Restore under a different name")
 
     subparsers.add_parser("restart", help="Stop and restart the runtime")
+    subparsers.add_parser("update", help="Pull latest code from GitHub and update dependencies")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the runtime log")
     logs_parser.add_argument("-n", "--lines", type=int, default=50, help="Lines of history to show (default: 50)")
@@ -845,6 +846,44 @@ def _cleanup_stale_runtime_files() -> None:
         _safe_unlink(lock_path)
 
 
+def _cmd_update(project_root: Path) -> int:
+    venv_pip = project_root / ".venv" / "bin" / "pip"
+    if os.name == "nt":
+        venv_pip = project_root / ".venv" / "Scripts" / "pip.exe"
+
+    # Check git is available and we're in a repo
+    if not (project_root / ".git").exists():
+        print("Error: project directory is not a git repository.")
+        print(f"  Expected: {project_root}/.git")
+        return 1
+
+    print("Pulling latest code from GitHub...")
+    result = subprocess.run(["git", "pull"], cwd=str(project_root))
+    if result.returncode != 0:
+        print("Error: git pull failed. Check your internet connection and try again.")
+        return result.returncode
+
+    print("\nUpdating dependencies...")
+    pip_cmd = str(venv_pip) if venv_pip.exists() else "pip"
+    result = subprocess.run([pip_cmd, "install", "--quiet", "-e", str(project_root)])
+    if result.returncode != 0:
+        print("Error: dependency update failed.")
+        return result.returncode
+
+    print("\nUpdate complete.")
+
+    # If the runtime is running, offer to restart it
+    pid_path = get_runtime_pid_file()
+    pid = _read_pid(pid_path)
+    if pid and _is_process_running(pid):
+        answer = input("\nThe runtime is currently running. Restart it now? [Y/n] ")
+        if answer.strip().lower() in ("", "y", "yes"):
+            _stop_runtime()
+            return _start_runtime(project_root)
+
+    return 0
+
+
 def _cmd_logs(lines: int = 50, follow: bool = True) -> int:
     import collections as _collections
     log_path = get_logs_file()
@@ -1261,6 +1300,9 @@ def main() -> int:
 
     if args.command == "logs":
         return _cmd_logs(lines=args.lines, follow=not args.no_follow)
+
+    if args.command == "update":
+        return _cmd_update(project_root)
 
     if args.command == "status":
         return _status_runtime()
