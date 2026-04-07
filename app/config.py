@@ -44,7 +44,7 @@ class AppConfig:
     # Rate-limit / caching knobs (all optional with safe defaults)
     cache_enabled: bool = True
     cache_ttl_seconds: int = 300
-    cooldown_seconds_per_chat: float = 1.0
+    cooldown_seconds_per_chat: float = 0.0
     max_prompt_chars: int = 24_000
     # Memory consolidation
     consolidation_enabled: bool = True
@@ -231,7 +231,7 @@ def load_config(config_path: str | Path) -> AppConfig:
         routing=routing,
         cache_enabled=bool(raw.get("cache_enabled", True)),
         cache_ttl_seconds=int(raw.get("cache_ttl_seconds", 300)),
-        cooldown_seconds_per_chat=float(raw.get("cooldown_seconds_per_chat", 1.0)),
+        cooldown_seconds_per_chat=float(raw.get("cooldown_seconds_per_chat", 0.0)),
         max_prompt_chars=int(raw.get("max_prompt_chars", 24_000)),
         consolidation_enabled=bool(raw.get("consolidation_enabled", True)),
         consolidation_keep_days=int(raw.get("consolidation_keep_days", 3)),
