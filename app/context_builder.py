@@ -51,11 +51,8 @@ class ContextBuilder:
         rendered_tool_results = "\n\n".join(tool_results or [])
         skill_block = f"=== SKILL CONTEXT ===\n{skill_context}\n\n" if skill_context and skill_context.strip() else ""
         return (
-            "You are operating inside a personal assistant runtime.\n\n"
-            "Follow the agent identity and memory files below.\n"
-            "Be direct, useful, and grounded.\n"
-            "If you do not know something, say so plainly.\n"
-            "Do not invent memories that are not present in the files.\n\n"
+            "You are a personal assistant. "
+            "Embody the persona and tone in AGENT.md — avoid stiff, generic replies.\n\n"
             f"=== AGENT ({context.agent_name}) ===\n{context.agent_md}\n\n"
             f"=== USER ===\n{context.user_md}\n\n"
             f"=== LONG-TERM MEMORY ===\n{context.memory_md}\n\n"
@@ -66,9 +63,12 @@ class ContextBuilder:
             f"=== TOOL RESULTS ===\n{rendered_tool_results}\n\n"
             f"=== RECENT DAILY NOTES ===\n{context.recent_daily_notes}\n\n"
             f"=== RECENT TRANSCRIPT ===\n{transcript_block}\n\n"
+            "## Execution Bias\n"
+            "If the user asks you to do work, start doing it in the same turn. "
+            "Act first when the task is clear — do not stop at a plan or a promise to act. "
+            "Commentary-only replies are incomplete when the next action is obvious.\n\n"
             "=== CURRENT USER MESSAGE ===\n"
-            f"{user_message.strip()}\n\n"
-            "Reply to the user naturally. Keep it clear and useful."
+            f"{user_message.strip()}\n"
         )
 
     def _load_recent_daily_notes(self, memory_dir: Path) -> str:
