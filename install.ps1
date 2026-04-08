@@ -24,20 +24,20 @@ function Write-Warn { param($msg) Write-Host "  [!]  $msg" -ForegroundColor Yell
 function Write-Fail { param($msg) Write-Host "  [X]  $msg" -ForegroundColor Red }
 function Write-Step { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
 
-Write-Host ""
-Write-Host "  ╔═════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "     _____ _                 _       _____ _                   " -ForegroundColor Cyan
-Write-Host "    / ____| |               | |     / ____| |                  " -ForegroundColor Cyan
-Write-Host "   | |    | | __ _ _   _  __| | ___| |    | | __ ___      __   " -ForegroundColor Cyan
-Write-Host "   | |    | |/ _`` | | | |/ _`` |/ _ \ |    | |/ _`` \ \ /\ / /  " -ForegroundColor Cyan
-Write-Host "   | |____| | (_| | |_| | (_| |  __/ |____| | (_| |\ V  V /   " -ForegroundColor Cyan
-Write-Host "    \_____|_|\__,_|\__,_|\__,_|\___|\_____|_|\__,_| \_/\_/    " -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  ╠═════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-Write-Host "           Your AI assistant, locally hosted.                  " -ForegroundColor Cyan
-Write-Host "  ╚═════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-Write-Host ""
+Write-Host ''
+Write-Host '  ╔═════════════════════════════════════════════════════════════╗' -ForegroundColor Cyan
+Write-Host ''
+Write-Host '     _____ _                 _       _____ _                   ' -ForegroundColor Cyan
+Write-Host '    / ____| |               | |     / ____| |                  ' -ForegroundColor Cyan
+Write-Host '   | |    | | __ _ _   _  __| | ___| |    | | __ ___      __   ' -ForegroundColor Cyan
+Write-Host '   | |    | |/ _` | | | |/ _` |/ _ \ |    | |/ _` \ \ /\ / /  ' -ForegroundColor Cyan
+Write-Host '   | |____| | (_| | |_| | (_| |  __/ |____| | (_| |\ V  V /   ' -ForegroundColor Cyan
+Write-Host '    \_____|_|\__,_|\__,_|\__,_|\___|\_____|_|\__,_| \_/\_/    ' -ForegroundColor Cyan
+Write-Host ''
+Write-Host '  ╠═════════════════════════════════════════════════════════════╣' -ForegroundColor Cyan
+Write-Host '           Your AI assistant, locally hosted.                  ' -ForegroundColor Cyan
+Write-Host '  ╚═════════════════════════════════════════════════════════════╝' -ForegroundColor Cyan
+Write-Host ''
 
 # -- Guard: auto-relocate if run from a system directory ----------------------
 $systemRoots = @($env:SystemRoot, $env:ProgramFiles, ${env:ProgramFiles(x86)})
