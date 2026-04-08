@@ -1082,6 +1082,11 @@ def _run_uninstall(*, yes: bool = False, project_root: Path) -> int:
         try:
             shutil.rmtree(project_root, ignore_errors=True)
             print("  Removed project directory.")
+            # Remove parent folder (e.g. ~/ClaudeClaw) if it's now empty
+            parent = project_root.parent
+            if parent.exists() and not any(parent.iterdir()):
+                parent.rmdir()
+                print(f"  Removed parent directory ({parent}).")
         except Exception as exc:
             print(f"  Warning: could not fully remove project directory: {exc}")
             print(f"  You can remove it manually: rm -rf {project_root}")
