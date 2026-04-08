@@ -78,19 +78,31 @@ The easiest platform to start with is **Telegram**.
 
 ## Installation
 
-### macOS
+### One-liner install from GitHub
 
-Double-click **`Mac Install.command`** in Finder.
+Open a terminal and paste one command:
 
-macOS will ask if you want to open it — click **Open**. A Terminal window appears and runs the installer automatically.
+**Mac / Linux:**
+```bash
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
+```
 
-### Windows
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git $HOME\ClaudeClaw\assistant; & "$HOME\ClaudeClaw\assistant\install.ps1"
+```
 
-Double-click **`Windows Install.bat`** in File Explorer.
+This clones the project and runs the installer in one step. The setup wizard starts automatically at the end.
 
-A PowerShell window opens and runs the installer automatically. No extra configuration needed.
+### Already have the files?
 
-### Prefer the terminal?
+If you downloaded or cloned the project manually:
+
+**macOS** — Double-click **`Mac Install.command`** in Finder.
+
+**Windows** — Double-click **`Windows Install.bat`** in File Explorer.
+
+**Or from the terminal:**
 
 **Mac / Linux:**
 ```bash
