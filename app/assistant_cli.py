@@ -904,18 +904,70 @@ def _remove_tree(path: Path, label: str) -> None:
         print(f"  Skipped (not found): {path}")
 
 
+def _remove_path_from_shell_profiles(venv_bin: str) -> None:
+    """Remove ClaudeClaw PATH entries from shell profile files on Mac/Linux."""
+    profiles = [
+        Path.home() / ".zshrc",
+        Path.home() / ".bash_profile",
+        Path.home() / ".bashrc",
+    ]
+    for profile in profiles:
+        if not profile.exists():
+            continue
+        lines = profile.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+        new_lines = []
+        skip_next = False
+        changed = False
+        for line in lines:
+            if skip_next:
+                skip_next = False
+                changed = True
+                continue
+            stripped = line.strip()
+            # Remove the comment marker and the export PATH line that follows
+            if stripped == "# ClaudeClaw":
+                skip_next = True
+                changed = True
+                continue
+            if venv_bin in stripped and stripped.startswith("export PATH"):
+                changed = True
+                continue
+            new_lines.append(line)
+        if changed:
+            profile.write_text("".join(new_lines), encoding="utf-8")
+            print(f"  Removed PATH entry from {profile}")
+
+
+def _remove_path_from_windows_env(venv_scripts: str) -> None:
+    """Remove ClaudeClaw Scripts path from Windows User PATH environment variable."""
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Environment",
+            0,
+            winreg.KEY_READ | winreg.KEY_WRITE,
+        )
+        current_path, _ = winreg.QueryValueEx(key, "PATH")
+        parts = [p for p in current_path.split(";") if p and venv_scripts.lower() not in p.lower()]
+        new_path = ";".join(parts)
+        winreg.SetValueEx(key, "PATH", 0, winreg.REG_EXPAND_SZ, new_path)
+        winreg.CloseKey(key)
+        print(f"  Removed PATH entry from Windows User environment.")
+    except Exception as exc:
+        print(f"  Warning: could not update Windows PATH: {exc}")
+
+
 def _run_uninstall(*, yes: bool = False, project_root: Path) -> int:
     from .app_paths import get_config_dir, get_data_dir, get_state_dir, get_logs_dir
 
     print()
     print("╔══════════════════════════════════════════════════╗")
-    print("║        assistant-runtime  ·  Uninstall           ║")
+    print("║           ClaudeClaw  ·  Uninstall               ║")
     print("╚══════════════════════════════════════════════════╝")
     print()
-    print("  This will remove runtime data, config, and logs.")
-    print("  Your agent files (AGENT.md, MEMORY.md, etc.) are")
-    print("  stored in the agents/ directory of the project and")
-    print("  will be removed only if you confirm below.")
+    print("  This will remove runtime data, config, logs, and")
+    print("  optionally the project files and venv.")
     print()
 
     if not yes:
@@ -1001,12 +1053,41 @@ def _run_uninstall(*, yes: bool = False, project_root: Path) -> int:
         else:
             print(f"  Kept agent files at: {agents_dir}")
 
-    # 8. Pip uninstall hint
+    # 8. Remove PATH entry from shell profiles / Windows env
     print()
-    print("  ─────────────────────────────────────────────────")
-    print("  To also remove the Python package, run:")
-    print("    pip uninstall assistant-runtime")
-    print("  ─────────────────────────────────────────────────")
+    if os.name == "nt":
+        venv_scripts = str(project_root / ".venv" / "Scripts")
+        if _confirm(f"Remove PATH entry from Windows User environment?", yes=yes):
+            _remove_path_from_windows_env(venv_scripts)
+    else:
+        venv_bin = str(project_root / ".venv" / "bin")
+        if _confirm(f"Remove PATH entry from shell profile? (~/.zshrc / ~/.bash_profile)", yes=yes):
+            _remove_path_from_shell_profiles(venv_bin)
+
+    # 9. Remove .venv
+    venv_dir = project_root / ".venv"
+    if venv_dir.exists():
+        print()
+        if _confirm(f"Remove virtual environment? ({venv_dir}  — removes 'assistant' command)", yes=yes):
+            _remove_tree(venv_dir, ".venv")
+
+    # 10. Remove project directory itself (must be last — deletes this script)
+    print()
+    print("  The project directory contains all ClaudeClaw source files.")
+    if _confirm(
+        f"Remove project directory? ({project_root}  — THIS DELETES ALL PROJECT FILES)",
+        yes=False,  # always require explicit confirmation
+    ):
+        print(f"  Removing {project_root} ...")
+        try:
+            shutil.rmtree(project_root, ignore_errors=True)
+            print("  Removed project directory.")
+        except Exception as exc:
+            print(f"  Warning: could not fully remove project directory: {exc}")
+            print(f"  You can remove it manually: rm -rf {project_root}")
+    else:
+        print(f"  Kept project directory at: {project_root}")
+
     print()
     print("  Uninstall complete.")
     print()
