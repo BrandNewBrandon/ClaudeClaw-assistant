@@ -552,7 +552,7 @@ class AssistantRouter:
 
         # ── Response cache ───────────────────────────────────────────────────────
         if self._config.cache_enabled and not self._commands.is_command(message.text):
-            cached = self._response_cache.get(message.chat_id, message.text)
+            cached = self._response_cache.get(message.chat_id, active_agent, message.text)
             if cached is not None:
                 LOGGER.info("Cache hit account=%s chat_id=%s", account_id, message.chat_id)
                 channel.send_message(message.chat_id, cached)
@@ -715,7 +715,7 @@ class AssistantRouter:
                 self._session_ids[session_key] = new_session_id
             self._cooldown.record(message.chat_id)
             if self._config.cache_enabled:
-                self._response_cache.set(message.chat_id, message.text, reply)
+                self._response_cache.set(message.chat_id, active_agent, message.text, reply)
         except Exception as exc:
             self._runtime_state.mark_error(str(exc))
             LOGGER.exception("Context or model execution failed for account=%s agent=%s", account_id, active_agent)
@@ -895,6 +895,11 @@ class AssistantRouter:
                     len(prompt), max_chars, active_agent, chat_id,
                 )
                 prompt = prompt[:max_chars]
+                channel.send_message(
+                    chat_id,
+                    "\u26a0\ufe0f Context was trimmed to fit the prompt limit. "
+                    "Consider using /compact or /new to shorten the conversation.",
+                )
 
             model_started_monotonic = time.monotonic()
             self._runtime_state.claude_model = model
@@ -1040,7 +1045,16 @@ class AssistantRouter:
             assert self._config is not None
             max_chars = self._config.max_prompt_chars
             if max_chars and len(prompt) > max_chars:
+                LOGGER.warning(
+                    "Prompt truncated from %d to %d chars agent=%s chat_id=%s",
+                    len(prompt), max_chars, active_agent, chat_id,
+                )
                 prompt = prompt[:max_chars]
+                channel.send_message(
+                    chat_id,
+                    "\u26a0\ufe0f Context was trimmed to fit the prompt limit. "
+                    "Consider using /compact or /new to shorten the conversation.",
+                )
 
             # --- streaming on_chunk callback ---
             buf: list[str] = []

@@ -9,42 +9,76 @@ restarts.
 """
 from __future__ import annotations
 
+import logging
 import time
 from typing import Tuple
 
+LOGGER = logging.getLogger(__name__)
+
+# Maximum number of entries the cache will hold before evicting oldest
+_DEFAULT_MAX_ENTRIES = 500
+
 
 class ResponseCache:
-    """TTL-keyed response cache keyed by (chat_id, normalised message text)."""
+    """TTL-keyed response cache keyed by (chat_id, agent, normalised message text)."""
 
-    def __init__(self, ttl_seconds: int = 300) -> None:
+    def __init__(self, ttl_seconds: int = 300, max_entries: int = _DEFAULT_MAX_ENTRIES) -> None:
         self._ttl = ttl_seconds
+        self._max_entries = max_entries
         # key -> (reply_text, expiry_timestamp)
-        self._store: dict[Tuple[str, str], tuple[str, float]] = {}
+        self._store: dict[Tuple[str, str, str], tuple[str, float]] = {}
+        self._hits = 0
+        self._misses = 0
 
     @staticmethod
-    def _make_key(chat_id: str, message: str) -> Tuple[str, str]:
-        return (chat_id, message.lower().strip())
+    def _make_key(chat_id: str, agent: str, message: str) -> Tuple[str, str, str]:
+        return (chat_id, agent, message.lower().strip())
 
-    def get(self, chat_id: str, message: str) -> str | None:
+    def get(self, chat_id: str, agent: str, message: str) -> str | None:
         """Return cached reply, or None on miss/expiry."""
-        key = self._make_key(chat_id, message)
+        key = self._make_key(chat_id, agent, message)
         entry = self._store.get(key)
         if entry is None:
+            self._misses += 1
             return None
         reply, expiry = entry
         if time.monotonic() >= expiry:
             del self._store[key]
+            self._misses += 1
             return None
+        self._hits += 1
         return reply
 
-    def set(self, chat_id: str, message: str, reply: str) -> None:
-        """Store a reply. Overwrites any existing entry."""
-        key = self._make_key(chat_id, message)
+    def set(self, chat_id: str, agent: str, message: str, reply: str) -> None:
+        """Store a reply. Overwrites any existing entry. Evicts oldest if full."""
+        self._evict_expired()
+        if len(self._store) >= self._max_entries:
+            self._evict_oldest()
+        key = self._make_key(chat_id, agent, message)
         self._store[key] = (reply, time.monotonic() + self._ttl)
 
-    def invalidate(self, chat_id: str, message: str) -> None:
+    def invalidate(self, chat_id: str, agent: str, message: str) -> None:
         """Remove a specific entry (e.g. after a slash command that changes state)."""
-        self._store.pop(self._make_key(chat_id, message), None)
+        self._store.pop(self._make_key(chat_id, agent, message), None)
+
+    def _evict_expired(self) -> None:
+        """Remove all expired entries."""
+        now = time.monotonic()
+        expired = [k for k, (_, exp) in self._store.items() if now >= exp]
+        for k in expired:
+            del self._store[k]
+
+    def _evict_oldest(self) -> None:
+        """Remove the oldest entry by expiry time."""
+        if not self._store:
+            return
+        oldest_key = min(self._store, key=lambda k: self._store[k][1])
+        del self._store[oldest_key]
+
+    @property
+    def stats(self) -> dict[str, int]:
+        """Return cache hit/miss statistics."""
+        return {"hits": self._hits, "misses": self._misses, "size": len(self._store)}
 
 
 class CooldownTracker:
