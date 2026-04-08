@@ -180,6 +180,60 @@ def _info(text: str) -> None:
         print(f"  {line}")
 
 
+def _detect_telegram_chat_id(token: str, timeout: int = 60) -> str | None:
+    """Poll Telegram getUpdates to auto-detect a chat ID.
+
+    Asks the user to send a message to their bot, then polls for up to
+    *timeout* seconds.  Returns the chat ID as a string, or None on failure.
+    """
+    import json
+    import urllib.request
+    import urllib.error
+
+    print("  Now open Telegram and send any message to your bot.")
+    print(f"  Waiting up to {timeout} seconds for a message...\n")
+
+    url = f"https://api.telegram.org/bot{token}/getUpdates?timeout=5&allowed_updates=[\"message\"]"
+    deadline = time.monotonic() + timeout
+
+    try:
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    data = json.loads(resp.read().decode())
+            except (urllib.error.URLError, OSError, json.JSONDecodeError):
+                time.sleep(2)
+                continue
+
+            if not data.get("ok"):
+                time.sleep(2)
+                continue
+
+            results = data.get("result", [])
+            for update in results:
+                msg = update.get("message") or update.get("edited_message")
+                if msg and "chat" in msg:
+                    chat_id = str(msg["chat"]["id"])
+                    # Acknowledge the update so it doesn't repeat
+                    offset = update["update_id"] + 1
+                    try:
+                        ack_url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}"
+                        urllib.request.urlopen(ack_url, timeout=5)
+                    except Exception:
+                        pass
+                    return chat_id
+
+            remaining = int(deadline - time.monotonic())
+            if remaining > 0:
+                print(f"\r  Listening... ({remaining}s remaining)  ", end="", flush=True)
+            time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+
+    print("\n  No message detected. Falling back to manual entry.\n")
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Agent scaffolding
 # ---------------------------------------------------------------------------
@@ -496,8 +550,20 @@ def _run_init(project_root: Path) -> int:
     token = _prompt_required(f"  {platform.capitalize()} bot token", secret=True)
     print()
 
-    chat_ids_raw = _prompt_required("  Allowed chat IDs (comma-separated)")
-    chat_ids = [c.strip() for c in chat_ids_raw.split(",") if c.strip()]
+    chat_ids: list[str] = []
+
+    # Auto-detect chat ID for Telegram
+    if platform == "telegram":
+        detected = _detect_telegram_chat_id(token)
+        if detected:
+            print(f"\n  Found chat ID: {detected}")
+            use_it = input("  Use this? [Y/n] ").strip() or "Y"
+            if use_it[0].lower() == "y":
+                chat_ids = [detected]
+
+    if not chat_ids:
+        chat_ids_raw = _prompt_required("  Allowed chat IDs (comma-separated)")
+        chat_ids = [c.strip() for c in chat_ids_raw.split(",") if c.strip()]
 
     channel_config: dict[str, str] = {}
     if platform == "slack":
