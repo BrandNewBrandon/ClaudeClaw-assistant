@@ -88,6 +88,10 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall_parser = subparsers.add_parser("uninstall", help="Remove all runtime data and config")
     uninstall_parser.add_argument("--yes", action="store_true", help="Skip confirmation prompts")
 
+    completion_parser = subparsers.add_parser("completion", help="Generate shell tab-completion script")
+    completion_parser.add_argument("shell", nargs="?", default=None, choices=["bash", "zsh", "fish"],
+                                   help="Shell type (auto-detected if omitted)")
+
     daemon_parser = subparsers.add_parser("daemon", help="Manage daemon autostart registration")
     daemon_sub = daemon_parser.add_subparsers(dest="daemon_action", required=True)
     daemon_sub.add_parser("install", help="Register autostart on login (launchd / systemd / schtasks)")
@@ -1121,6 +1125,69 @@ def _cmd_hatch(project_root: Path, agent_name: str | None = None) -> int:
     return 0
 
 
+def _cmd_completion(shell: str | None) -> int:
+    """Generate shell tab-completion script."""
+    if shell is None:
+        # Auto-detect from $SHELL
+        shell_path = os.environ.get("SHELL", "")
+        if "zsh" in shell_path:
+            shell = "zsh"
+        elif "fish" in shell_path:
+            shell = "fish"
+        else:
+            shell = "bash"
+
+    # Gather all subcommands from the parser
+    parser = build_parser()
+    subcommands = []
+    for action in parser._subparsers._actions:
+        if hasattr(action, "choices") and action.choices:
+            subcommands = sorted(action.choices.keys())
+            break
+
+    if shell == "bash":
+        print(f"""\
+# Bash completion for assistant
+# Add to ~/.bashrc:  eval "$(assistant completion bash)"
+_assistant_completions() {{
+    local cur="${{COMP_WORDS[COMP_CWORD]}}"
+    local cmds="{' '.join(subcommands)}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=($(compgen -W "$cmds" -- "$cur"))
+    fi
+}}
+complete -F _assistant_completions assistant""")
+    elif shell == "zsh":
+        subcmd_lines = "\n".join(f"        '{cmd}'" for cmd in subcommands)
+        print(f"""\
+# Zsh completion for assistant
+# Add to ~/.zshrc:  eval "$(assistant completion zsh)"
+_assistant() {{
+    local -a commands
+    commands=(
+{subcmd_lines}
+    )
+    if (( CURRENT == 2 )); then
+        _describe 'command' commands
+    fi
+}}
+compdef _assistant assistant""")
+    elif shell == "fish":
+        lines = "\n".join(
+            f"complete -c assistant -n '__fish_use_subcommand' -a '{cmd}'"
+            for cmd in subcommands
+        )
+        print(f"""\
+# Fish completion for assistant
+# Add to ~/.config/fish/completions/assistant.fish
+{lines}""")
+    else:
+        print(f"Unknown shell: {shell}")
+        return 1
+
+    return 0
+
+
 def _cmd_update(project_root: Path) -> int:
     venv_pip = project_root / ".venv" / "bin" / "pip"
     if os.name == "nt":
@@ -1657,6 +1724,9 @@ def main() -> int:
 
         run_stdio()
         return 0
+
+    if args.command == "completion":
+        return _cmd_completion(args.shell)
 
     if args.command == "pair":
         return _cmd_pair(args.code, list_pending=args.list_pending)

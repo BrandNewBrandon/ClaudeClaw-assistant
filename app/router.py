@@ -23,6 +23,7 @@ from .instance_lock import InstanceLock, InstanceLockError
 from .app_paths import get_config_file, get_runtime_lock_file, get_runtime_pid_file, get_state_dir
 from .logging_utils import configure_logging
 from .briefing import BriefingThread
+from .hooks import HookRegistry
 from .memory import ConsolidationThread, MemoryStore
 from .model_runner import ModelRunner, ModelRunnerError
 from .pairing import PairingStore
@@ -143,6 +144,8 @@ class AssistantRouter:
         if self._reset_thread is not None:
             self._reset_thread.start()
 
+        self._hooks.emit("startup", accounts=list(self._account_runtimes.keys()))
+
         worker_threads = self._start_account_workers()
 
         try:
@@ -152,6 +155,7 @@ class AssistantRouter:
             print("Shutting down.")
             return
         finally:
+            self._hooks.emit("shutdown")
             self._stop_event.set()
             if self._scheduler is not None:
                 self._scheduler.stop()
@@ -277,6 +281,15 @@ class AssistantRouter:
                 last_activity=self._last_activity,
                 active_agents=self._active_agents,
             )
+
+        # Hooks
+        self._hooks = HookRegistry()
+        hooks_dir = self._config.project_root / "hooks"
+        self._hooks.load_from_directory(hooks_dir)
+        # Also check user-level hooks
+        user_hooks_dir = get_state_dir().parent / "hooks"
+        if user_hooks_dir != hooks_dir:
+            self._hooks.load_from_directory(user_hooks_dir)
 
         user_skills_dir = get_state_dir().parent / "skills"
         self._plugin_registry = build_plugin_registry(user_skills_dir=user_skills_dir)
@@ -440,6 +453,8 @@ class AssistantRouter:
 
         LOGGER.info("Received message account=%s chat_id=%s message_id=%s", account_id, message.chat_id, message.message_id)
         self._runtime_state.mark_message(message_id=message.message_id)
+        self._hooks.emit_async("message_in", account_id=account_id, chat_id=message.chat_id,
+                               text=message.text, message_id=message.message_id)
 
         if message.chat_id not in account.allowed_chat_ids and message.chat_id not in self._extra_allowed.get(account_id, set()):
             if self._pairing is not None:
@@ -587,6 +602,8 @@ class AssistantRouter:
                 self._session_ids.pop(session_key, None)
                 active_agent = routing.default_agent
                 LOGGER.info("Reset session state for account=%s chat_id=%s", account_id, message.chat_id)
+                self._hooks.emit_async("session_reset", account_id=account_id,
+                                       chat_id=message.chat_id, agent=active_agent, trigger="manual")
             if remember_text == "__COMPACT__":
                 # Manual compaction request
                 if self._compactor is not None:
@@ -606,6 +623,15 @@ class AssistantRouter:
             elif remember_text:
                 self._memory.append_daily_note(active_agent, f"Remembered: {remember_text}")
                 LOGGER.info("Stored explicit memory account=%s chat_id=%s agent=%s", account_id, message.chat_id, active_agent)
+
+            # Handle __HOOKS__ command
+            if reply == "__HOOKS__":
+                events = self._hooks.registered_events()
+                count = self._hooks.handler_count
+                if events:
+                    reply = f"Registered hooks ({count} handler(s)):\n" + "\n".join(f"  • {e}" for e in events)
+                else:
+                    reply = "No hooks registered.\nDrop .py files in hooks/ to add event handlers."
 
             reply_send_started = time.monotonic()
             channel.send_message(message.chat_id, reply)
@@ -627,6 +653,8 @@ class AssistantRouter:
                 message_text=reply,
                 metadata={"kind": "command_reply"},
             )
+            self._hooks.emit_async("command", account_id=account_id, chat_id=message.chat_id,
+                                   agent=active_agent, command=message.text.strip())
             return
 
         image_path = message.image_path
@@ -693,6 +721,8 @@ class AssistantRouter:
             LOGGER.exception("Context or model execution failed for account=%s agent=%s", account_id, active_agent)
             reply = f"Runtime error: {exc}"
             new_session_id = None
+            self._hooks.emit_async("error", account_id=account_id, chat_id=message.chat_id,
+                                   agent=active_agent, error=str(exc))
         finally:
             # Clean up the temp image file regardless of success or failure
             if image_path:
@@ -729,6 +759,8 @@ class AssistantRouter:
             message_text=reply,
             metadata={"kind": "assistant_reply"},
         )
+        self._hooks.emit_async("message_out", account_id=account_id, chat_id=message.chat_id,
+                               agent=active_agent, text=reply)
 
         note = f"User: {message.text}\n\nAssistant: {reply}"
         self._memory.append_daily_note(active_agent, note)

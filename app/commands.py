@@ -155,6 +155,10 @@ class CommandHandler:
         if stripped == "/compact":
             return ("Compacting conversation history…", None, False, "__COMPACT__")
 
+        # ── /hooks ───────────────────────────────────────────────────────────
+        if stripped == "/hooks":
+            return ("__HOOKS__", None, False, None)
+
         # ── /agents ──────────────────────────────────────────────────────────
         if stripped == "/agents":
             agents = self.list_agents()
@@ -593,6 +597,7 @@ class CommandHandler:
                     "/new — start a fresh conversation (resets session)",
                     "/reset — alias for /new",
                     "/compact — summarize older messages to free up context",
+                    "/hooks — show registered event hooks",
                     "/session reset — reset chat session state",
                     *skill_commands,
                 ]),

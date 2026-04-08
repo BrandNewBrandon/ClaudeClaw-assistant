@@ -1,0 +1,34 @@
+"""Example hook file — rename to example_hook.py to enable.
+
+Hooks are Python functions that run when specific events occur in the
+runtime.  Drop .py files in this directory and they'll be auto-loaded.
+
+Available events:
+  startup        — runtime is starting up
+  shutdown       — runtime is shutting down
+  message_in     — a user message was received
+  message_out    — the assistant sent a reply
+  session_reset  — a session was reset (/new, /reset, daily, idle)
+  command        — a slash command was executed
+  compaction     — session compaction occurred
+  error          — an error occurred during message handling
+
+Each event dict always has: {"event": "...", "timestamp": "..."}
+Plus event-specific keys (chat_id, agent, text, error, etc.)
+"""
+from app.hooks import hook
+
+
+@hook("startup")
+def on_startup(event):
+    print(f"[hook] Runtime started at {event['timestamp']}")
+
+
+@hook("message_in")
+def on_message(event):
+    print(f"[hook] Message from chat {event.get('chat_id')}: {event.get('text', '')[:50]}")
+
+
+@hook("error")
+def on_error(event):
+    print(f"[hook] ERROR: {event.get('error', 'unknown')}")
