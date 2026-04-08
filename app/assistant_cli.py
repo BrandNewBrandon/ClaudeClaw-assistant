@@ -26,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     chat_parser.add_argument("--agent", default=None, help="Agent name (default: from config)")
     chat_parser.add_argument("--chat-id", default="terminal", dest="chat_id", help="Session ID for transcript continuity (default: terminal)")
 
+    hatch_parser = subparsers.add_parser("hatch", help="Hatch a new agent — interactive first-run conversation")
+    hatch_parser.add_argument("--agent", default=None, help="Agent name (default: from config)")
+
     subparsers.add_parser("init", help="First-time setup wizard")
     subparsers.add_parser("configure", help="Reconfigure the runtime (re-runs setup prompts)")
 
@@ -511,16 +514,26 @@ def _run_init(project_root: Path) -> int:
     _section("Setup Complete")
     _info("Next steps:")
     _info("")
-    _info("  1. Run 'assistant doctor' to verify everything looks good")
-    _info("  2. Message your bot — it will reply!")
-    _info("     (if autostart was enabled above, the runtime is already running)")
-    _info("     (otherwise run 'assistant start' first)")
-    _info("")
     _info(f"  Agent files: {agents_dir / agent_name}/")
-    _info(f"    Edit AGENT.md  to shape the assistant's personality")
-    _info(f"    Edit USER.md   to give the agent context about you")
+    _info(f"    AGENT.md  — the assistant's personality (its soul)")
+    _info(f"    USER.md   — what the agent knows about you")
     _info("")
     _info("  Run 'assistant ui' to open the web dashboard.")
+    print()
+
+    # Offer to hatch the agent
+    bootstrap_path = agents_dir / agent_name / "BOOTSTRAP.md"
+    if bootstrap_path.exists():
+        print()
+        _info("Your agent is ready to hatch! This is an interactive conversation")
+        _info("where you and your agent figure out who it is together.")
+        print()
+        hatch_answer = input("  Hatch your agent now? [Y/n]: ").strip().lower()
+        if hatch_answer in ("", "y", "yes"):
+            print()
+            return _cmd_hatch(project_root, agent_name=agent_name)
+        else:
+            _info("Skipped. Run 'assistant hatch' at any time to start the conversation.")
     print()
 
     # Run doctor automatically
@@ -919,6 +932,58 @@ def _cleanup_stale_runtime_files() -> None:
         return
     if not _is_process_running(lock_pid):
         _safe_unlink(lock_path)
+
+
+def _cmd_hatch(project_root: Path, agent_name: str | None = None) -> int:
+    """Interactive first-run conversation to hatch (bootstrap) an agent."""
+    config_path = get_config_file()
+    if not config_path.exists():
+        print("No config found. Run 'assistant init' first.")
+        return 1
+
+    from .config import load_config
+    config = load_config(config_path)
+    name = agent_name or config.default_agent
+    bootstrap_path = config.agents_dir / name / "BOOTSTRAP.md"
+
+    if not bootstrap_path.exists():
+        print(f"Agent '{name}' has already been hatched (no BOOTSTRAP.md found).")
+        print(f"Run 'assistant chat --agent {name}' to talk to it.")
+        return 0
+
+    print()
+    print("  Hatching your agent...")
+    print(f"  Agent: {name}")
+    print(f"  This is a first-run conversation where you and your agent")
+    print(f"  figure out who it is together. When you're done, it will")
+    print(f"  delete BOOTSTRAP.md and become its own thing.")
+    print()
+    print("  Type 'quit' or Ctrl-C to exit.")
+    print()
+
+    from .chat_session import TerminalChatSession
+
+    try:
+        session = TerminalChatSession(
+            agent_name=name,
+            chat_id="hatch",
+        )
+        session.run()
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    # Check if bootstrap was deleted during the conversation
+    if not bootstrap_path.exists():
+        print()
+        print(f"  Your agent '{name}' has hatched! BOOTSTRAP.md was deleted.")
+        print(f"  Run 'assistant start' to go live, or 'assistant chat' to keep talking.")
+    else:
+        print()
+        print(f"  Session ended. BOOTSTRAP.md still exists — the agent hasn't fully hatched yet.")
+        print(f"  Run 'assistant hatch' again to continue.")
+    print()
+    return 0
 
 
 def _cmd_update(project_root: Path) -> int:
@@ -1390,6 +1455,9 @@ def main() -> int:
             print(f"Error: {exc}")
             return 1
         return 0
+
+    if args.command == "hatch":
+        return _cmd_hatch(project_root, agent_name=args.agent)
 
     if args.command == "init":
         return _run_init(project_root)
