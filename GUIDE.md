@@ -246,7 +246,7 @@ These are commands you type in Terminal. They manage the runtime itself.
 | `assistant status` | Show whether the runtime is running |
 | `assistant ui` | Open the web dashboard in your browser |
 | `assistant mcp` | Start the MCP server (for connecting Claude Code directly) |
-| `assistant uninstall` | Remove all runtime data and config |
+| `assistant uninstall` | Full uninstall — removes data, config, venv, PATH entry, and optionally the project directory |
 | `assistant chat` | Chat with your default agent directly in the terminal |
 | `assistant chat --agent <name>` | Chat with a specific agent in the terminal |
 | `assistant daemon install` | Register the runtime to start automatically when you log in |
@@ -676,9 +676,20 @@ and which file or setting needs attention.
 If you want to completely reset and start over:
 
 ```bash
-assistant stop
 assistant uninstall
-bash install.sh
+```
+
+The uninstall wizard walks you through removing each component:
+- Runtime state, logs, and config
+- Agent files (AGENT.md, MEMORY.md, daily notes)
+- PATH entry from your shell profile
+- The `.venv` virtual environment
+- The project directory itself (always requires explicit confirmation)
+
+After uninstalling, do a fresh install with:
+
+```bash
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
 ```
 
 ---
