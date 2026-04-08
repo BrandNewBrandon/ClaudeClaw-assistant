@@ -14,10 +14,14 @@ It uses Claude (Anthropic's AI) as its brain and keeps its own memory between co
 5. [Starting and stopping](#starting-and-stopping)
 6. [Terminal commands](#terminal-commands)
 7. [Chat commands](#chat-commands)
-8. [Agent files](#agent-files)
-9. [Web dashboard](#web-dashboard)
-10. [Multiple agents](#multiple-agents)
-11. [Troubleshooting](#troubleshooting)
+8. [Session compaction](#session-compaction)
+9. [Session resets](#session-resets)
+10. [Agent files](#agent-files)
+11. [Web dashboard](#web-dashboard)
+12. [Multiple agents](#multiple-agents)
+13. [DM pairing](#dm-pairing)
+14. [Hooks](#hooks)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -241,6 +245,9 @@ These are commands you type in Terminal. They manage the runtime itself.
 | `assistant manage clone-agent <name> <new-name>` | Copy an agent |
 | `assistant manage rename-agent <name> <new-name>` | Rename an agent |
 | `assistant manage delete-agent <name>` | Delete an agent |
+| `assistant pair <code>` | Approve a new user's pairing request |
+| `assistant pair --list` | Show pending pairing requests |
+| `assistant completion` | Generate shell completions for bash, zsh, or fish |
 
 ---
 
@@ -270,6 +277,10 @@ in the chat with your bot. They start with a `/`.
 | `/effort` | Shows the current effort level |
 | `/effort <level>` | Change effort level: `low`, `medium`, or `high` |
 | `/session reset` | Clears the current conversation session and starts fresh |
+| `/new` | Start a fresh conversation (same as `/session reset`) |
+| `/reset` | Start a fresh conversation (same as `/session reset`) |
+| `/compact` | Manually compact the conversation history into a summary |
+| `/hooks` | Show loaded hook scripts and their events |
 
 ### Memory and notes
 
@@ -363,6 +374,54 @@ If you have set the `OBSIDIAN_VAULT_PATH` environment variable, these commands w
 
 ---
 
+## Session compaction
+
+As you chat with the assistant, your conversation history grows. When it gets too long,
+the runtime automatically **compacts** it — older messages are summarized into a short recap,
+and only the recent messages are kept in full.
+
+This happens in the background. You do not need to do anything.
+
+- The assistant remembers the key points from earlier in the conversation
+- Recent messages are always kept in full detail
+- The summary is stored in the transcript so nothing is lost
+
+If you want to trigger compaction manually (for example, after a long coding session):
+
+```
+/compact
+```
+
+You can configure compaction behaviour in `config.json` — see [Config fields](#optional-config-fields) below.
+
+---
+
+## Session resets
+
+A session reset clears the current conversation and starts fresh. The transcript is preserved
+in history — you are just starting a new thread.
+
+### Manual reset
+
+Type any of these in chat:
+
+```
+/new
+/reset
+/session reset
+```
+
+### Automatic resets
+
+You can configure the runtime to reset sessions automatically:
+
+- **Daily reset** — reset all sessions at a specific hour each day (e.g. 4am)
+- **Idle reset** — reset a session after a period of inactivity (e.g. 60 minutes)
+
+Set these in `config.json` — see [Config fields](#optional-config-fields) below.
+
+---
+
 ## Agent files
 
 Each agent has its own folder inside `agents/<name>/`. These are plain text files you can
@@ -444,6 +503,12 @@ The **Chat tab** lets you pick an agent from a dropdown, type messages, and have
 
 You can run the dashboard at the same time as the runtime — they do not interfere.
 
+### Dashboard authentication
+
+The dashboard API is protected by a bearer token, which is generated automatically during `assistant init`. The token is embedded into the dashboard page so your browser authenticates seamlessly.
+
+If you need to regenerate the token, use `assistant configure`.
+
 ---
 
 ## Multiple agents
@@ -475,6 +540,81 @@ The next message and all messages after it will use the `research` agent until y
 
 You can permanently map a Telegram chat to a specific agent in your config file.
 Use `assistant configure` or edit the config directly.
+
+---
+
+## DM pairing
+
+By default, the bot only responds to chat IDs listed in your config.
+**DM pairing** lets new users request access without you editing config files.
+
+### How it works
+
+1. A new user sends a message to your bot
+2. The bot replies: "Pairing required. Your code is: **482916**"
+3. You see the request in your logs, or run:
+   ```bash
+   assistant pair --list
+   ```
+4. Approve the user:
+   ```bash
+   assistant pair 482916
+   ```
+5. Their chat ID is added to your config automatically — no restart needed
+6. The bot tells them they are connected
+
+Pairing codes expire after 10 minutes and are rate-limited to one per user every 5 minutes.
+
+To disable pairing (unknown users are silently ignored instead), set `pairing_enabled` to `false` in `config.json`.
+
+---
+
+## Hooks
+
+Hooks let you run custom Python scripts when specific events happen in the runtime —
+without modifying core code.
+
+### Setting up hooks
+
+Create `.py` files in the `hooks/` directory at the project root. They are loaded automatically when the runtime starts.
+
+### Writing a hook
+
+```python
+# hooks/my_hook.py
+from app.hooks import hook
+
+@hook("message_in")
+def on_message(event):
+    print(f"Got message from {event['chat_id']}: {event['text'][:50]}")
+
+@hook("error")
+def on_error(event):
+    # Send alert, log to file, etc.
+    print(f"Error: {event['error']}")
+```
+
+### Available events
+
+| Event | When it fires |
+|---|---|
+| `startup` | Runtime is starting up |
+| `shutdown` | Runtime is shutting down |
+| `message_in` | A user message was received |
+| `message_out` | The assistant sent a reply |
+| `session_reset` | A session was reset |
+| `command` | A slash command was executed |
+| `compaction` | Session compaction occurred |
+| `error` | An error occurred during message handling |
+| `tool_call` | A tool was invoked (web search, file access, etc.) |
+
+Each event is a dict with at least `{"event": "...", "timestamp": "..."}` plus event-specific keys like `chat_id`, `text`, `error`, etc.
+
+### Checking loaded hooks
+
+Type `/hooks` in chat to see which hook scripts are loaded and what events they listen for.
+
+An example hook file is included at `hooks/example_hook.py.disabled` — rename it to `.py` to enable it.
 
 ---
 
@@ -586,6 +726,27 @@ Example — morning and evening briefings:
 ```
 
 These can also be configured from chat with `/briefing on`, `/briefing set 8 20`, etc.
+
+**Session compaction**
+
+| Field | Default | What it does |
+|---|---|---|
+| `compaction_enabled` | `true` | Auto-summarize old messages when conversation gets long |
+| `compaction_token_budget` | `12000` | Estimated token limit before compaction triggers |
+
+**Session resets**
+
+| Field | Default | What it does |
+|---|---|---|
+| `session_reset_daily_hour` | `null` | Hour (0–23) to auto-reset all sessions daily |
+| `session_idle_reset_minutes` | `null` | Minutes of inactivity before a session auto-resets |
+
+**Security and access**
+
+| Field | Default | What it does |
+|---|---|---|
+| `dashboard_token` | (auto-generated) | Bearer token for web dashboard API access |
+| `pairing_enabled` | `true` | Allow unknown users to request pairing codes |
 
 ---
 
