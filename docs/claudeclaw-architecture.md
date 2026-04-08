@@ -2,7 +2,7 @@
 
 ## Purpose
 
-ClaudeClaw is the working concept for turning `assistant-runtime` into a personal OpenClaw-like assistant platform powered by Claude Code.
+ClaudeClaw is a personal OpenClaw-like assistant platform powered by Claude Code.
 
 The design goal is **not** to copy OpenClaw mechanically. The goal is to reproduce the important capabilities and operating model:
 - persistent identity

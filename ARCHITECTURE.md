@@ -83,7 +83,7 @@ Not in Phase 1:
 ## Project Layout
 
 ```text
-assistant-runtime/
+ClaudeClaw/
   app/
     main.py
     config.py
@@ -413,7 +413,7 @@ At minimum:
 
 ## Naming
 
-Temporary project name:
-- `assistant-runtime`
+Project name:
+- `ClaudeClaw`
 
-This can be renamed later without changing the architecture.
+The `assistant` CLI command and Python package name (`assistant-runtime`) remain unchanged.
