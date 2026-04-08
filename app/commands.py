@@ -147,9 +147,13 @@ class CommandHandler:
                 None,
             )
 
-        # ── /session reset ───────────────────────────────────────────────────
-        if stripped == "/session reset":
-            return ("Session state reset for this chat.", None, True, None)
+        # ── /new, /reset, /session reset ─────────────────────────────────────
+        if stripped in ("/new", "/reset", "/session reset"):
+            return ("Session reset. Starting fresh.", None, True, None)
+
+        # ── /compact ─────────────────────────────────────────────────────────
+        if stripped == "/compact":
+            return ("Compacting conversation history…", None, False, "__COMPACT__")
 
         # ── /agents ──────────────────────────────────────────────────────────
         if stripped == "/agents":
@@ -586,6 +590,9 @@ class CommandHandler:
                     "/remember <text> — save to daily notes",
                     "/note <text> — alias for /remember",
                     "/memory — show relevant memory snippets",
+                    "/new — start a fresh conversation (resets session)",
+                    "/reset — alias for /new",
+                    "/compact — summarize older messages to free up context",
                     "/session reset — reset chat session state",
                     *skill_commands,
                 ]),

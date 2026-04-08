@@ -47,6 +47,7 @@ class ContextBuilder:
         tool_instructions: str | None = None,
         tool_results: list[str] | None = None,
         skill_context: str | None = None,
+        compaction_summary: str | None = None,
     ) -> str:
         transcript_block = self._format_transcript(recent_transcript or [])
         relevant_memory_block = self._format_relevant_memory(relevant_memory or [])
@@ -100,7 +101,13 @@ class ContextBuilder:
         if rendered_tool_results:
             sections.append(f"=== TOOL RESULTS ===\n{rendered_tool_results}")
 
-        # 12. Recent transcript
+        # 12. Compaction summary (older conversation context)
+        if compaction_summary:
+            sections.append(
+                f"=== CONVERSATION SUMMARY (older messages) ===\n{compaction_summary}"
+            )
+
+        # 12b. Recent transcript (verbatim recent messages)
         if transcript_block:
             sections.append(f"=== RECENT TRANSCRIPT ===\n{transcript_block}")
 

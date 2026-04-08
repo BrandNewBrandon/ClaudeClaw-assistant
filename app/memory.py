@@ -148,6 +148,79 @@ class MemoryStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(asdict(entry), ensure_ascii=False) + "\n")
 
+    def append_compaction_summary(
+        self,
+        *,
+        surface: str,
+        account_id: str = "primary",
+        chat_id: str,
+        agent: str,
+        summary_text: str,
+        compacted_count: int,
+    ) -> None:
+        """Append a compaction marker to the transcript.
+
+        Everything before the most recent compaction marker is replaced by
+        the summary text when building context.  The raw JSONL is never
+        modified — this is purely additive.
+        """
+        self.append_transcript(
+            surface=surface,
+            account_id=account_id,
+            chat_id=chat_id,
+            direction="compaction",
+            agent=agent,
+            message_text=summary_text,
+            metadata={"kind": "compaction_summary", "compacted_count": compacted_count},
+        )
+
+    def read_transcript_with_compaction(
+        self,
+        surface: str,
+        chat_id: str,
+        *,
+        account_id: str = "primary",
+    ) -> tuple[str | None, list[TranscriptEntry]]:
+        """Read transcript respecting compaction markers.
+
+        Returns ``(compaction_summary_or_None, recent_entries_after_last_compaction)``.
+        If no compaction marker exists, returns ``(None, all_entries)``.
+        """
+        path = self.transcript_path(surface, chat_id, account_id=account_id)
+        if not path.exists():
+            return None, []
+
+        all_entries: list[TranscriptEntry] = []
+        last_compaction_idx: int | None = None
+
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            entry = TranscriptEntry(
+                timestamp=str(raw.get("timestamp", "")),
+                surface=str(raw.get("surface", "")),
+                account_id=str(raw.get("account_id", "primary")),
+                chat_id=str(raw.get("chat_id", "")),
+                direction=str(raw.get("direction", "")),
+                agent=str(raw.get("agent", "")),
+                message_text=str(raw.get("message_text", "")),
+                metadata=raw.get("metadata", {}) or {},
+            )
+            all_entries.append(entry)
+            if entry.direction == "compaction":
+                last_compaction_idx = i
+
+        if last_compaction_idx is None:
+            return None, all_entries
+
+        summary = all_entries[last_compaction_idx].message_text
+        recent = all_entries[last_compaction_idx + 1:]
+        return summary, recent
+
     def read_recent_transcript(self, surface: str, chat_id: str, limit: int = 6, *, account_id: str = "primary") -> list[TranscriptEntry]:
         path = self.transcript_path(surface, chat_id, account_id=account_id)
         if not path.exists():

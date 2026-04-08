@@ -25,6 +25,7 @@ from .logging_utils import configure_logging
 from .briefing import BriefingThread
 from .memory import ConsolidationThread, MemoryStore
 from .model_runner import ModelRunner, ModelRunnerError
+from .pairing import PairingStore
 from .runtime_state import RuntimeState
 from .scheduler import Scheduler, TaskStore
 from .sessions import SessionStore
@@ -139,6 +140,8 @@ class AssistantRouter:
             self._consolidation_thread.start()
         if self._briefing_thread is not None:
             self._briefing_thread.start()
+        if self._reset_thread is not None:
+            self._reset_thread.start()
 
         worker_threads = self._start_account_workers()
 
@@ -156,6 +159,8 @@ class AssistantRouter:
                 self._consolidation_thread.stop()
             if self._briefing_thread is not None:
                 self._briefing_thread.stop()
+            if self._reset_thread is not None:
+                self._reset_thread.stop()
             for account_runtime in self._account_runtimes.values():
                 account_runtime.channel.stop()
             for thread in worker_threads:
@@ -192,6 +197,8 @@ class AssistantRouter:
         self._context_builder = ContextBuilder(agents_dir=self._config.agents_dir)
         self._memory = MemoryStore(shared_dir=self._config.shared_dir, agents_dir=self._config.agents_dir)
         self._sessions = SessionStore(shared_dir=self._config.shared_dir)
+        self._pairing = PairingStore(get_state_dir()) if self._config.pairing_enabled else None
+        self._extra_allowed: dict[str, set[str]] = defaultdict(set)  # account_id -> {chat_ids added via pairing}
 
         if self._config.consolidation_enabled:
             self._consolidation_thread = ConsolidationThread(
@@ -244,6 +251,32 @@ class AssistantRouter:
             self._briefing_thread.register_sender(key, _make_sender(ch))
             for chat_id in account_runtime.account.allowed_chat_ids:
                 self._briefing_thread.register_target(key, chat_id)
+
+        # Session compaction
+        self._last_activity: dict[str, float] = {}   # session_key -> monotonic time
+        self._active_agents: dict[str, str] = {}      # session_key -> agent name
+        self._compactor = None
+        if self._config.compaction_enabled:
+            from .compaction import SessionCompactor
+            self._compactor = SessionCompactor(
+                memory=self._memory,
+                model_runner=self._model_runner,
+                token_budget=self._config.compaction_token_budget,
+                working_directory=self._config.project_root,
+            )
+
+        # Session reset thread (daily / idle)
+        self._reset_thread = None
+        if self._config.session_reset_daily_hour is not None or self._config.session_idle_reset_minutes is not None:
+            from .session_reset import SessionResetThread
+            self._reset_thread = SessionResetThread(
+                memory_store=self._memory,
+                sessions=self._sessions,
+                daily_hour=self._config.session_reset_daily_hour,
+                idle_minutes=self._config.session_idle_reset_minutes,
+                last_activity=self._last_activity,
+                active_agents=self._active_agents,
+            )
 
         user_skills_dir = get_state_dir().parent / "skills"
         self._plugin_registry = build_plugin_registry(user_skills_dir=user_skills_dir)
@@ -399,9 +432,21 @@ class AssistantRouter:
         LOGGER.info("Received message account=%s chat_id=%s message_id=%s", account_id, message.chat_id, message.message_id)
         self._runtime_state.mark_message(message_id=message.message_id)
 
-        if message.chat_id not in account.allowed_chat_ids:
-            LOGGER.warning("Ignoring unauthorized chat_id=%s on account=%s", message.chat_id, account_id)
-            print(f"Ignoring unauthorized chat_id={message.chat_id} on account={account_id}")
+        if message.chat_id not in account.allowed_chat_ids and message.chat_id not in self._extra_allowed.get(account_id, set()):
+            if self._pairing is not None:
+                result = self._pairing.request(account_id, message.chat_id)
+                if result is not None:
+                    pairing_msg, code = result
+                    try:
+                        channel.send_message(message.chat_id, pairing_msg)
+                    except Exception:
+                        LOGGER.exception("Failed to send pairing code to chat_id=%s", message.chat_id)
+                    print(f"PAIRING REQUEST: code={code} chat_id={message.chat_id} account={account_id}")
+                else:
+                    LOGGER.debug("Rate-limited pairing request from chat_id=%s", message.chat_id)
+            else:
+                LOGGER.warning("Ignoring unauthorized chat_id=%s on account=%s", message.chat_id, account_id)
+                print(f"Ignoring unauthorized chat_id={message.chat_id} on account={account_id}")
             return
 
         last_seen_key = self._chat_lock_key(account_id, message.chat_id)
@@ -520,9 +565,36 @@ class AssistantRouter:
                 LOGGER.info("Switched account=%s chat_id=%s to agent=%s", account_id, message.chat_id, switch_agent_to)
             if reset_chat:
                 self._sessions.reset_chat(message.chat_id, session_key=session_key)
+                # Write a compaction marker so the context builder starts fresh
+                self._memory.append_compaction_summary(
+                    surface=surface,
+                    account_id=account_id,
+                    chat_id=message.chat_id,
+                    agent=active_agent,
+                    summary_text="[Session manually reset by user.]",
+                    compacted_count=0,
+                )
+                # Clear session ID so claude-code starts a new conversation
+                self._session_ids.pop(session_key, None)
                 active_agent = routing.default_agent
                 LOGGER.info("Reset session state for account=%s chat_id=%s", account_id, message.chat_id)
-            if remember_text:
+            if remember_text == "__COMPACT__":
+                # Manual compaction request
+                if self._compactor is not None:
+                    try:
+                        compacted = self._compactor.maybe_compact(
+                            surface, message.chat_id, active_agent,
+                            account_id=account_id,
+                        )
+                        if compacted:
+                            reply = "Conversation history compacted."
+                        else:
+                            reply = "History is within budget — no compaction needed."
+                    except Exception as exc:
+                        reply = f"Compaction failed: {exc}"
+                else:
+                    reply = "Compaction is disabled."
+            elif remember_text:
                 self._memory.append_daily_note(active_agent, f"Remembered: {remember_text}")
                 LOGGER.info("Stored explicit memory account=%s chat_id=%s agent=%s", account_id, message.chat_id, active_agent)
 
@@ -550,14 +622,34 @@ class AssistantRouter:
 
         image_path = message.image_path
         already_sent = False
+
+        # Track activity for idle reset / compaction
+        self._last_activity[session_key] = time.monotonic()
+        self._active_agents[session_key] = active_agent
+
         try:
             agent_context = self._context_builder.load_agent_context(active_agent)
-            recent_transcript = self._memory.read_recent_transcript(
+
+            # Run compaction if needed (before reading transcript)
+            if self._compactor is not None:
+                try:
+                    self._compactor.maybe_compact(
+                        surface, message.chat_id, active_agent,
+                        account_id=account_id,
+                    )
+                except Exception:
+                    LOGGER.exception("Compaction failed for chat_id=%s", message.chat_id)
+
+            # Read transcript with compaction awareness
+            compaction_summary, recent_transcript = self._memory.read_transcript_with_compaction(
                 surface,
                 message.chat_id,
-                limit=6,
                 account_id=account_id,
             )
+            # Limit recent entries to prevent huge context
+            if len(recent_transcript) > 20:
+                recent_transcript = recent_transcript[-20:]
+
             relevant_memory = self._memory.find_relevant_memory(
                 active_agent,
                 message.text,
@@ -580,6 +672,7 @@ class AssistantRouter:
                 chat_id=message.chat_id,
                 image_path=image_path,
                 channel=channel,
+                compaction_summary=compaction_summary,
             )
             if new_session_id:
                 self._session_ids[session_key] = new_session_id
@@ -649,6 +742,7 @@ class AssistantRouter:
         chat_id: str = "",
         image_path: str | None = None,
         channel: "BaseChannel | None" = None,
+        compaction_summary: str | None = None,
     ) -> tuple[str, str | None, bool]:
         """Run the model + tool loop.
 
@@ -689,6 +783,7 @@ class AssistantRouter:
                 model=model,
                 effort=effort,
                 session_id=session_id,
+                compaction_summary=compaction_summary,
             )
             if streaming_result is not None:
                 reply, new_session_id = streaming_result
@@ -748,6 +843,7 @@ class AssistantRouter:
                 tool_instructions=tool_loop.tool_instructions(require_tool=require_tool and not tool_results),
                 tool_results=tool_results,
                 skill_context=skill_context or None,
+                compaction_summary=compaction_summary,
             )
 
             assert self._config is not None
@@ -823,6 +919,7 @@ class AssistantRouter:
         model: str | None,
         effort: str | None,
         session_id: str | None,
+        compaction_summary: str | None = None,
     ) -> tuple[str, str | None] | None:
         """Streaming version of the tool loop.
 
@@ -896,6 +993,7 @@ class AssistantRouter:
                 tool_instructions=tool_loop.tool_instructions(require_tool=require_tool and not tool_results),
                 tool_results=tool_results,
                 skill_context=skill_context or None,
+                compaction_summary=compaction_summary,
             )
 
             assert self._config is not None

@@ -215,8 +215,11 @@ _HTML = """\
 <script>
 const API = '';
 
+const authHeaders = typeof DASHBOARD_TOKEN !== 'undefined' && DASHBOARD_TOKEN
+  ? {'Authorization': 'Bearer ' + DASHBOARD_TOKEN} : {};
+
 async function apiFetch(path) {
-  const r = await fetch(API + path);
+  const r = await fetch(API + path, {headers: authHeaders});
   return r.json();
 }
 
@@ -399,7 +402,7 @@ async function sendChatMessage() {
   try {
     const resp = await fetch('/api/chat', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
       body: JSON.stringify({agent_name: agentName, chat_id: chatId, message: msg})
     });
     const data = await resp.json();
@@ -484,7 +487,7 @@ async function runGapCheck() {
   try {
     const resp = await fetch('/api/gap-check', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
       body: JSON.stringify({url})
     });
     const data = await resp.json();
@@ -864,6 +867,7 @@ class _Handler(BaseHTTPRequestHandler):
     _shared_dir: Path
     _db_path: Path
     _config_path: Path
+    _dashboard_token: str
     _chat_sessions: dict[str, Any]
     _chat_jobs: dict[str, Any]
     _chat_lock: threading.Lock
@@ -872,6 +876,25 @@ class _Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args: object) -> None:
         LOGGER.debug("web: " + fmt, *args)
+
+    def _check_auth(self) -> bool:
+        """Verify Bearer token for API routes. Returns True if authorized."""
+        token = self._dashboard_token
+        if not token:
+            return True  # no token configured — auth disabled
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header == f"Bearer {token}":
+            return True
+        # Also accept ?token= query param (for browser convenience)
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        if qs.get("token", [None])[0] == token:
+            return True
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"error": "Unauthorized"}')
+        return False
 
     def _send_json(self, data: Any, status: int = 200) -> None:
         body = json.dumps(data, default=str).encode("utf-8")
@@ -896,7 +919,16 @@ class _Handler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
 
         if path == "/":
-            self._send_html(_HTML)
+            # Inject the dashboard token into HTML so JS can authenticate
+            html = _HTML.replace(
+                "const API = '';",
+                f"const API = '';\nconst DASHBOARD_TOKEN = '{self._dashboard_token}';",
+            )
+            self._send_html(html)
+            return
+
+        # All /api/* routes require auth
+        if path.startswith("/api/") and not self._check_auth():
             return
 
         if path == "/api/status":
@@ -939,6 +971,9 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
+
+        if path.startswith("/api/") and not self._check_auth():
+            return
 
         if path == "/api/chat":
             length = int(self.headers.get("Content-Length", 0))
@@ -997,6 +1032,7 @@ class WebDashboard:
         self._shared_dir = shared_dir or Path(cfg.get("shared_dir", str(project_root / "shared"))).expanduser()
         self._db_path = get_state_dir() / "tasks.db"
         self._config_path = get_config_file()
+        self._dashboard_token: str = str(cfg.get("dashboard_token", ""))
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
@@ -1027,6 +1063,7 @@ class WebDashboard:
         BoundHandler._shared_dir = shared_dir
         BoundHandler._db_path = db_path
         BoundHandler._config_path = config_path
+        BoundHandler._dashboard_token = self._dashboard_token
         BoundHandler._chat_sessions = chat_sessions
         BoundHandler._chat_jobs = chat_jobs
         BoundHandler._chat_lock = chat_lock

@@ -56,9 +56,18 @@ class AppConfig:
     # Quiet hours (HH:MM 24-hour format, e.g. "22:00". Both None = disabled)
     quiet_hours_start: str | None = None
     quiet_hours_end: str | None = None
+    # Web dashboard auth
+    dashboard_token: str = ""
+    # DM pairing
+    pairing_enabled: bool = True
     # Morning briefing / heartbeat
     briefing_enabled: bool = False
     briefing_times: list[int] = field(default_factory=lambda: [9])
+    # Session compaction
+    compaction_enabled: bool = True
+    compaction_token_budget: int = 12_000
+    session_reset_daily_hour: int | None = None
+    session_idle_reset_minutes: int | None = None
 
 
 class ConfigError(Exception):
@@ -238,8 +247,14 @@ def load_config(config_path: str | Path) -> AppConfig:
         consolidation_hour=int(raw.get("consolidation_hour", 2)),
         semantic_search_enabled=bool(raw.get("semantic_search_enabled", True)),
         embedding_model=str(raw.get("embedding_model", "BAAI/bge-small-en-v1.5")),
+        dashboard_token=str(raw.get("dashboard_token", "")),
+        pairing_enabled=bool(raw.get("pairing_enabled", True)),
         quiet_hours_start=_optional_string(raw, "quiet_hours_start"),
         quiet_hours_end=_optional_string(raw, "quiet_hours_end"),
         briefing_enabled=bool(raw.get("briefing_enabled", False)),
         briefing_times=[int(h) for h in raw.get("briefing_times", [9])],
+        compaction_enabled=bool(raw.get("compaction_enabled", True)),
+        compaction_token_budget=int(raw.get("compaction_token_budget", 12_000)),
+        session_reset_daily_hour=int(raw.get("session_reset_daily_hour")) if raw.get("session_reset_daily_hour") is not None else None,
+        session_idle_reset_minutes=int(raw.get("session_idle_reset_minutes")) if raw.get("session_idle_reset_minutes") is not None else None,
     )

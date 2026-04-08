@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from .app_paths import ensure_runtime_dirs, get_config_file, get_logs_file, get_runtime_lock_file, get_runtime_pid_file
+from .app_paths import ensure_runtime_dirs, get_config_file, get_logs_file, get_runtime_lock_file, get_runtime_pid_file, get_state_dir
 from .config_manager import ensure_config_exists, load_raw_config, update_config_values, write_config
 from .doctor import run_doctor
 
@@ -81,6 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("mcp", help="Start the MCP stdio server")
 
+    pair_parser = subparsers.add_parser("pair", help="Approve a DM pairing request")
+    pair_parser.add_argument("code", nargs="?", type=int, default=None, help="6-digit pairing code")
+    pair_parser.add_argument("--list", action="store_true", dest="list_pending", help="Show pending pairing requests")
+
     uninstall_parser = subparsers.add_parser("uninstall", help="Remove all runtime data and config")
     uninstall_parser.add_argument("--yes", action="store_true", help="Skip confirmation prompts")
 
@@ -125,6 +129,8 @@ def _print_quick_help() -> None:
     print("  assistant clone <src> <dst> Copy an agent")
     print("  assistant rename <src> <dst> Rename an agent")
     print("  assistant delete <name>     Archive an agent")
+    print("  assistant pair <code>       Approve a DM pairing request")
+    print("  assistant pair --list       Show pending pairing requests")
     print("  assistant manage <cmd>      Agent management (extended commands)")
     print("  assistant test              Show test command guidance")
     print("  assistant uninstall         Remove all runtime data and config")
@@ -384,10 +390,65 @@ def _run_init(project_root: Path) -> int:
 
     if config_path.exists():
         print(f"Config already exists at: {config_path}")
-        answer = input("Re-run setup anyway? [y/N]: ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("Skipped. Run 'assistant configure' to change individual settings.")
+        print()
+        print("  1) Keep    — exit, change nothing")
+        print("  2) Modify  — update individual settings")
+        print("  3) Reset   — start fresh")
+        print()
+        while True:
+            choice = input("  Enter 1, 2, or 3 [1]: ").strip() or "1"
+            if choice in ("1", "2", "3"):
+                break
+            print("  Please enter 1, 2, or 3.")
+
+        if choice == "1":
+            print("No changes made.")
             return 0
+
+        if choice == "2":
+            return _run_configure(project_root)
+
+        # choice == "3" — Reset
+        print()
+        print("  Reset scope:")
+        print("    1) Config only        — removes config, keeps agents and data")
+        print("    2) Config + sessions  — removes config, transcripts, task DB, sessions")
+        print("    3) Full reset         — removes everything including agent files")
+        print()
+        while True:
+            scope = input("  Reset scope [1]: ").strip() or "1"
+            if scope in ("1", "2", "3"):
+                break
+            print("  Please enter 1, 2, or 3.")
+
+        import datetime as _dt
+        backup_dir = Path.home() / ".assistant-backup" / _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # Always remove config
+        if config_path.exists():
+            shutil.move(str(config_path), str(backup_dir / config_path.name))
+            print(f"  Config backed up to: {backup_dir / config_path.name}")
+
+        if scope in ("2", "3"):
+            state_dir = get_state_dir()
+            if state_dir.exists():
+                shutil.move(str(state_dir), str(backup_dir / "state"))
+                print(f"  State data backed up to: {backup_dir / 'state'}")
+
+        if scope == "3":
+            raw = {}
+            try:
+                raw = load_raw_config(backup_dir / config_path.name)
+            except Exception:
+                pass
+            agents_dir = Path(raw.get("agents_dir", str(project_root / "agents"))).expanduser()
+            if agents_dir.exists():
+                shutil.move(str(agents_dir), str(backup_dir / "agents"))
+                print(f"  Agents backed up to: {backup_dir / 'agents'}")
+
+        print(f"\n  Backup location: {backup_dir}")
+        print("  Continuing with fresh setup...\n")
 
     # ── Step 1: Check prerequisites ─────────────────────────────────────────
     _section("Step 1 of 5 — Prerequisites")
@@ -470,6 +531,10 @@ def _run_init(project_root: Path) -> int:
     if channel_config:
         account_entry["channel_config"] = channel_config
 
+    # Generate dashboard token if not already present
+    import secrets as _secrets
+    dashboard_token = base.get("dashboard_token") or _secrets.token_urlsafe(32)
+
     updates: dict = {
         "project_root": str(project_root),
         "agents_dir": str(agents_dir),
@@ -478,10 +543,13 @@ def _run_init(project_root: Path) -> int:
         "model_provider": "claude-code",
         "accounts": {"primary": account_entry},
         "routing": {"primary": {"default_agent": agent_name, "chat_agent_map": {}}},
+        "dashboard_token": dashboard_token,
     }
     base.update(updates)
     write_config(config_path, base)
     print(f"  Config written to: {config_path}")
+    print(f"  Dashboard token: {dashboard_token}")
+    _info("(Use this token to access the web dashboard API)")
 
     # ── Step 6: Autostart ─────────────────────────────────────────────────────
     _section("Step 6 of 6 — Autostart (optional)")
@@ -613,6 +681,20 @@ def _run_configure(project_root: Path) -> int:
     default_agent = _prompt(current.get("default_agent"), "  Default agent name") or current.get("default_agent", "main")
     claude_model = _prompt(current.get("claude_model"), "  Claude model (leave blank for default)")
     claude_effort = _prompt(current.get("claude_effort"), "  Claude effort level (leave blank for default)")
+
+    # Dashboard token
+    import secrets as _secrets
+    current_dash_token = current.get("dashboard_token", "")
+    if current_dash_token:
+        masked = current_dash_token[:8] + "..." + current_dash_token[-4:]
+        print(f"\n  Dashboard token: {masked}")
+        regen = input("  Regenerate dashboard token? [y/N]: ").strip().lower()
+        if regen in ("y", "yes"):
+            current_dash_token = _secrets.token_urlsafe(32)
+            print(f"  New token: {current_dash_token}")
+    else:
+        current_dash_token = _secrets.token_urlsafe(32)
+        print(f"\n  Generated dashboard token: {current_dash_token}")
     print()
 
     # Build updated account
@@ -629,6 +711,7 @@ def _run_configure(project_root: Path) -> int:
         "model_provider": "claude-code",
         "accounts": {"primary": account_entry},
         "routing": {"primary": {"default_agent": default_agent, "chat_agent_map": {}}},
+        "dashboard_token": current_dash_token,
     }
     if claude_model:
         updates["claude_model"] = claude_model
@@ -932,6 +1015,58 @@ def _cleanup_stale_runtime_files() -> None:
         return
     if not _is_process_running(lock_pid):
         _safe_unlink(lock_path)
+
+
+def _cmd_pair(code: int | None, *, list_pending: bool = False) -> int:
+    """Approve a DM pairing request or list pending requests."""
+    from .pairing import PairingStore
+
+    store = PairingStore(get_state_dir())
+
+    if list_pending or code is None:
+        pending = store.pending()
+        if not pending:
+            print("No pending pairing requests.")
+            return 0
+        print(f"{'Code':<10} {'Account':<15} {'Chat ID':<20} {'Age'}")
+        print("-" * 60)
+        import time as _time
+        now = _time.time()
+        for entry in pending:
+            age = int(now - entry.get("created_at", now))
+            mins, secs = divmod(age, 60)
+            print(f"{entry['code']:<10} {entry['account_id']:<15} {entry['chat_id']:<20} {mins}m{secs}s ago")
+        if code is None:
+            return 0
+
+    if code is not None:
+        result = store.approve(code)
+        if result is None:
+            print(f"Pairing code {code} not found or expired.")
+            return 1
+
+        account_id, chat_id = result
+        # Update the config to add this chat_id
+        config_path = get_config_file()
+        raw = load_raw_config(config_path)
+        accounts = raw.get("accounts", {})
+        account_entry = accounts.get(account_id, {})
+        allowed = account_entry.get("allowed_chat_ids", raw.get("allowed_chat_ids", []))
+        if chat_id not in allowed:
+            allowed.append(chat_id)
+            if account_id in accounts:
+                accounts[account_id]["allowed_chat_ids"] = allowed
+                raw["accounts"] = accounts
+            else:
+                raw["allowed_chat_ids"] = allowed
+            write_config(config_path, raw)
+            print(f"Paired! Added chat_id={chat_id} to account={account_id}")
+            print("Run 'assistant restart' for the change to take effect.")
+        else:
+            print(f"chat_id={chat_id} is already allowed on account={account_id}")
+        return 0
+
+    return 0
 
 
 def _cmd_hatch(project_root: Path, agent_name: str | None = None) -> int:
@@ -1522,6 +1657,9 @@ def main() -> int:
 
         run_stdio()
         return 0
+
+    if args.command == "pair":
+        return _cmd_pair(args.code, list_pending=args.list_pending)
 
     if args.command == "uninstall":
         return _run_uninstall(yes=args.yes, project_root=project_root)
