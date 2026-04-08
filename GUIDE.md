@@ -684,7 +684,8 @@ The uninstall wizard walks you through removing each component:
 - Agent files (AGENT.md, MEMORY.md, daily notes)
 - PATH entry from your shell profile
 - The `.venv` virtual environment
-- The project directory itself (always requires explicit confirmation)
+- The project directory itself (e.g. `~/ClaudeClaw/assistant`) — always requires explicit confirmation
+- The parent folder (e.g. `~/ClaudeClaw`) if it's empty after removal
 
 After uninstalling, do a fresh install with:
 
