@@ -1,4 +1,4 @@
-# assistant-runtime — User Guide
+# ClaudeClaw — User Guide
 
 A personal AI assistant that runs on your computer and connects to your messaging apps.
 It uses Claude (Anthropic's AI) as its brain and keeps its own memory between conversations.
@@ -23,7 +23,7 @@ It uses Claude (Anthropic's AI) as its brain and keeps its own memory between co
 
 ## What it is
 
-assistant-runtime is a background program that:
+ClaudeClaw is a background program that:
 
 - Connects to your Telegram (or Discord or Slack) account
 - Listens for messages from you
@@ -90,13 +90,13 @@ A PowerShell window opens and runs the installer automatically. No extra configu
 
 **Mac / Linux:**
 ```bash
-cd ~/Projects/assistant-runtime
+cd ~/ClaudeClaw/assistant
 bash install.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-cd ~\Projects\assistant-runtime
+cd ~\ClaudeClaw\assistant
 .\install.ps1
 ```
 

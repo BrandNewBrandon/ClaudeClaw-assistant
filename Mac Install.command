@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mac Install.command — double-click this file in Finder to install assistant-runtime.
+# Mac Install.command — double-click this file in Finder to install ClaudeClaw.
 # macOS will open it in Terminal automatically.
 
 # Move to the project root (where this file lives)

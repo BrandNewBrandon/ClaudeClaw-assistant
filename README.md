@@ -1,4 +1,4 @@
-# assistant-runtime
+# ClaudeClaw
 
 Standalone personal assistant runtime powered by Claude Code and designed to recreate the richer OpenClaw experience without paid model APIs.
 
@@ -225,7 +225,7 @@ A Terminal or PowerShell window opens and walks you through the rest automatical
 On a Mac, make sure you have:
 - Homebrew available
 - Claude Code CLI (`claude`) installed and authenticated
-- this repo copied somewhere like `~/Projects/assistant-runtime`
+- this repo copied somewhere like `~/ClaudeClaw/assistant`
 
 ### Important note about Python on Mac
 
@@ -423,15 +423,15 @@ Manual testing is still useful for:
 
 **Mac/Linux:**
 ```bash
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git
-cd assistant-runtime
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant
+cd ~/ClaudeClaw/assistant
 ./install.sh
 ```
 
 **Windows:**
 ```
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git
-cd assistant-runtime
+git clone https://github.com/BrandNewBrandon/assistant-runtime.git %USERPROFILE%\ClaudeClaw\assistant
+cd %USERPROFILE%\ClaudeClaw\assistant
 & ".\Windows Install.bat"
 ```
 

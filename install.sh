@@ -2,7 +2,7 @@
 # install.sh — one-command installer for assistant-runtime
 #
 # Usage:
-#   cd ~/Projects/assistant-runtime
+#   cd ~/ClaudeClaw/assistant
 #   bash install.sh
 #
 # What it does:
@@ -25,9 +25,18 @@ fail() { echo -e "  ${RED}✗${RESET} $*"; }
 step() { echo -e "\n${BOLD}$*${RESET}"; }
 
 echo
-echo -e "${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║      assistant-runtime  ·  Installer             ║${RESET}"
-echo -e "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
+echo -e "${BOLD}  ╔═════════════════════════════════════════════════════════════╗${RESET}"
+echo ""
+echo -e "${BOLD}     _____ _                 _       _____ _                   ${RESET}"
+echo -e "${BOLD}    / ____| |               | |     / ____| |                  ${RESET}"
+echo -e "${BOLD}   | |    | | __ _ _   _  __| | ___| |    | | __ ___      __   ${RESET}"
+echo -e "${BOLD}   | |    | |/ _\` | | | |/ _\` |/ _ \ |    | |/ _\` \ \ /\ / /  ${RESET}"
+echo -e "${BOLD}   | |____| | (_| | |_| | (_| |  __/ |____| | (_| |\ V  V /   ${RESET}"
+echo -e "${BOLD}    \_____|_|\__,_|\__,_|\__,_|\___|\_____|_|\__,_| \_/\_/    ${RESET}"
+echo ""
+echo -e "${BOLD}  ╠═════════════════════════════════════════════════════════════╣${RESET}"
+echo -e "${BOLD}           Your AI assistant, locally hosted.                  ${RESET}"
+echo -e "${BOLD}  ╚═════════════════════════════════════════════════════════════╝${RESET}"
 echo
 
 # ── Step 1: Find Python ──────────────────────────────────────────────────────
@@ -80,11 +89,11 @@ else
 fi
 
 # ── Step 4: Install package ──────────────────────────────────────────────────
-step "Step 4 — Installing assistant-runtime"
+step "Step 4 — Installing ClaudeClaw"
 
 "$VENV/bin/pip" install --quiet --upgrade pip
 "$VENV/bin/pip" install --quiet -e "$PROJECT_ROOT"
-ok "Installed assistant-runtime (editable mode)"
+ok "Installed ClaudeClaw (editable mode)"
 
 # ── Step 5: Add to PATH ──────────────────────────────────────────────────────
 step "Step 5 — Adding 'assistant' to PATH"
@@ -100,7 +109,7 @@ add_to_profile() {
     return 0
   fi
   echo "" >> "$profile"
-  echo "# assistant-runtime" >> "$profile"
+  echo "# ClaudeClaw" >> "$profile"
   echo "$PATH_LINE" >> "$profile"
   ok "Added PATH entry to $profile"
   return 0

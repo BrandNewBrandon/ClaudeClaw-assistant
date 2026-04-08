@@ -1,5 +1,5 @@
 @echo off
-:: Windows Install.bat — double-click this file in File Explorer to install assistant-runtime.
+:: Windows Install.bat — double-click this file in File Explorer to install ClaudeClaw.
 :: Opens PowerShell and runs the installer. No extra configuration required.
 ::
 :: Note: -ExecutionPolicy Bypass applies only to this single run.

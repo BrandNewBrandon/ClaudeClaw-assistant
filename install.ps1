@@ -25,16 +25,25 @@ function Write-Fail { param($msg) Write-Host "  [X]  $msg" -ForegroundColor Red 
 function Write-Step { param($msg) Write-Host "`n$msg" -ForegroundColor Cyan }
 
 Write-Host ""
-Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "   assistant-runtime  -  Installer (Windows)    " -ForegroundColor Cyan
-Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "  ╔═════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "     _____ _                 _       _____ _                   " -ForegroundColor Cyan
+Write-Host "    / ____| |               | |     / ____| |                  " -ForegroundColor Cyan
+Write-Host "   | |    | | __ _ _   _  __| | ___| |    | | __ ___      __   " -ForegroundColor Cyan
+Write-Host "   | |    | |/ _`` | | | |/ _`` |/ _ \ |    | |/ _`` \ \ /\ / /  " -ForegroundColor Cyan
+Write-Host "   | |____| | (_| | |_| | (_| |  __/ |____| | (_| |\ V  V /   " -ForegroundColor Cyan
+Write-Host "    \_____|_|\__,_|\__,_|\__,_|\___|\_____|_|\__,_| \_/\_/    " -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  ╠═════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+Write-Host "           Your AI assistant, locally hosted.                  " -ForegroundColor Cyan
+Write-Host "  ╚═════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
 # -- Guard: auto-relocate if run from a system directory ----------------------
 $systemRoots = @($env:SystemRoot, $env:ProgramFiles, ${env:ProgramFiles(x86)})
 foreach ($sysRoot in $systemRoots) {
     if ($sysRoot -and $ProjectRoot.StartsWith($sysRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        $SafeRoot = "C:\Users\$env:USERNAME\Projects\assistant-runtime"
+        $SafeRoot = "C:\Users\$env:USERNAME\ClaudeClaw\assistant"
         Write-Host ""
         Write-Host "  [!]  Installer is running from a system directory:" -ForegroundColor Yellow
         Write-Host "       $ProjectRoot" -ForegroundColor Yellow
@@ -111,11 +120,11 @@ if ((Test-Path $Venv) -and (Test-Path $VenvPython)) {
 }
 
 # -- Step 4: Install package --------------------------------------------------
-Write-Step "Step 4 - Installing assistant-runtime"
+Write-Step "Step 4 - Installing ClaudeClaw"
 
 & $VenvPython -m pip install --quiet --upgrade pip
 & $VenvPython -m pip install --quiet -e $ProjectRoot
-Write-Ok "Installed assistant-runtime (editable mode)"
+Write-Ok "Installed ClaudeClaw (editable mode)"
 
 # -- Step 5: Add to PATH ------------------------------------------------------
 Write-Step "Step 5 - Adding 'assistant' to PATH"
