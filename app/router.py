@@ -331,6 +331,15 @@ class AssistantRouter:
                 return
 
     def _poll_account_once(self, account_id: str, account_runtime: AccountRuntime) -> None:
+        # Check for newly approved pairings from the CLI
+        if self._pairing is not None:
+            try:
+                for pair_account, pair_chat in self._pairing.poll_approved():
+                    self._extra_allowed[pair_account].add(pair_chat)
+                    LOGGER.info("Pairing approved at runtime: account=%s chat_id=%s", pair_account, pair_chat)
+            except Exception:
+                pass  # non-fatal
+
         try:
             updates = account_runtime.channel.get_updates()
             for update in updates:

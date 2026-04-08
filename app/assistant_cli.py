@@ -1061,7 +1061,7 @@ def _cmd_pair(code: int | None, *, list_pending: bool = False) -> int:
                 raw["allowed_chat_ids"] = allowed
             write_config(config_path, raw)
             print(f"Paired! Added chat_id={chat_id} to account={account_id}")
-            print("Run 'assistant restart' for the change to take effect.")
+            print("The running runtime will pick this up automatically.")
         else:
             print(f"chat_id={chat_id} is already allowed on account={account_id}")
         return 0

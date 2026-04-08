@@ -30,6 +30,7 @@ class PairingStore:
 
     def __init__(self, state_dir: Path) -> None:
         self._path = state_dir / "pairing_requests.json"
+        self._approved_path = state_dir / "pairing_approved.json"
         self._lock = threading.Lock()
         self._rate_limits: dict[str, float] = {}  # chat_id -> last request time
 
@@ -75,7 +76,11 @@ class PairingStore:
         return [e for e in entries if now - e.get("created_at", 0) < _CODE_EXPIRY_SECONDS]
 
     def approve(self, code: int) -> tuple[str, str] | None:
-        """Approve a pairing code. Returns (account_id, chat_id) or None."""
+        """Approve a pairing code. Returns (account_id, chat_id) or None.
+
+        Also writes to the approved-pairs file so the running runtime
+        can pick up the new chat_id without a restart.
+        """
         now = time.time()
         entries = self._read_all()
         remaining: list[dict[str, Any]] = []
@@ -89,7 +94,44 @@ class PairingStore:
             remaining.append(entry)
 
         self._write_all(remaining)
+
+        if result is not None:
+            self._write_approved(result[0], result[1])
+
         return result
+
+    def poll_approved(self) -> list[tuple[str, str]]:
+        """Read and clear newly approved pairs. Returns list of (account_id, chat_id).
+
+        Called by the router to pick up approvals made via the CLI.
+        """
+        with self._lock:
+            if not self._approved_path.exists():
+                return []
+            try:
+                data = json.loads(self._approved_path.read_text(encoding="utf-8"))
+                pairs = [(e["account_id"], e["chat_id"]) for e in data if isinstance(e, dict)]
+            except (json.JSONDecodeError, OSError, KeyError):
+                pairs = []
+            # Clear the file after reading
+            if pairs:
+                self._approved_path.write_text("[]\n", encoding="utf-8")
+            return pairs
+
+    def _write_approved(self, account_id: str, chat_id: str) -> None:
+        """Append an approved pair to the approved file for the runtime to pick up."""
+        with self._lock:
+            existing: list[dict[str, Any]] = []
+            if self._approved_path.exists():
+                try:
+                    existing = json.loads(self._approved_path.read_text(encoding="utf-8"))
+                    if not isinstance(existing, list):
+                        existing = []
+                except (json.JSONDecodeError, OSError):
+                    existing = []
+            existing.append({"account_id": account_id, "chat_id": chat_id})
+            self._approved_path.parent.mkdir(parents=True, exist_ok=True)
+            self._approved_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
 
     def _append(self, entry: dict[str, Any]) -> None:
         with self._lock:
