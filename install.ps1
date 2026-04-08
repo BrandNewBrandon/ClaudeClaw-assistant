@@ -66,37 +66,81 @@ foreach ($sysRoot in $systemRoots) {
     }
 }
 
+# -- Helper: find a suitable Python -------------------------------------------
+function Find-Python {
+    $Candidates = @('python3.13', 'python3.12', 'python3.11', 'python3', 'python')
+    foreach ($candidate in $Candidates) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found) {
+            try {
+                $major = & $candidate -c 'import sys; print(sys.version_info.major)' 2>$null
+                $minor = & $candidate -c 'import sys; print(sys.version_info.minor)' 2>$null
+                if ([int]$major -eq 3 -and [int]$minor -ge $PythonMinMinor) {
+                    return $candidate
+                }
+            } catch {}
+        }
+    }
+    return $null
+}
+
 # -- Step 1: Find Python ------------------------------------------------------
 Write-Step "Step 1 - Checking Python"
 
-$PythonExe = $null
-$Candidates = @('python3.13', 'python3.12', 'python3.11', 'python3', 'python')
+$PythonExe = Find-Python
 
-foreach ($candidate in $Candidates) {
-    $found = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($found) {
-        try {
-            $major = & $candidate -c 'import sys; print(sys.version_info.major)' 2>$null
-            $minor = & $candidate -c 'import sys; print(sys.version_info.minor)' 2>$null
-            if ([int]$major -eq 3 -and [int]$minor -ge $PythonMinMinor) {
-                $PythonExe = $candidate
-                break
-            }
-        } catch {}
+if ($PythonExe) {
+    $PythonVersion = & $PythonExe --version 2>&1
+    Write-Ok "Found $PythonVersion ($PythonExe)"
+} else {
+    Write-Warn "Python 3.$PythonMinMinor+ not found."
+    Write-Host ""
+    $answer = Read-Host "  Would you like to install it now? [Y/n]"
+    if (-not $answer) { $answer = 'Y' }
+
+    if ($answer -match '^[Yy]') {
+        $wingetFound = Get-Command winget -ErrorAction SilentlyContinue
+        if ($wingetFound) {
+            Write-Host "  Installing Python 3.12 via winget..."
+            winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+            # Refresh PATH so we can find the new Python
+            $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+        } else {
+            Write-Warn "winget not available. Trying python.org installer..."
+            Write-Host "  Downloading Python 3.12 installer..."
+            $installerUrl = 'https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe'
+            $installerPath = Join-Path $env:TEMP 'python-installer.exe'
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
+            Write-Host "  Running Python installer (this may take a minute)..."
+            Start-Process -Wait -FilePath $installerPath -ArgumentList '/quiet', 'InstallAllUsers=0', 'PrependPath=1'
+            Remove-Item $installerPath -ErrorAction SilentlyContinue
+            # Refresh PATH
+            $env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+        }
+
+        # Re-check after install
+        $PythonExe = Find-Python
+        if ($PythonExe) {
+            $PythonVersion = & $PythonExe --version 2>&1
+            Write-Ok "Installed $PythonVersion ($PythonExe)"
+        } else {
+            Write-Fail "Python install did not succeed."
+            Write-Host ""
+            Write-Host "  Download manually from: https://www.python.org/downloads/"
+            Write-Host "  Make sure to check 'Add Python to PATH' during install."
+            Write-Host "  Then re-run this installer."
+            Write-Host ""
+            exit 1
+        }
+    } else {
+        Write-Host ""
+        Write-Host "  Download from: https://www.python.org/downloads/"
+        Write-Host "  Make sure to check 'Add Python to PATH' during install."
+        Write-Host "  Then re-run this installer."
+        Write-Host ""
+        exit 1
     }
 }
-
-if (-not $PythonExe) {
-    Write-Fail "Python 3.$PythonMinMinor+ not found."
-    Write-Host ""
-    Write-Host "  Download from: https://www.python.org/downloads/"
-    Write-Host "  Make sure to check 'Add Python to PATH' during install."
-    Write-Host ""
-    exit 1
-}
-
-$PythonVersion = & $PythonExe --version 2>&1
-Write-Ok "Found $PythonVersion ($PythonExe)"
 
 # -- Step 2: Check claude CLI -------------------------------------------------
 Write-Step "Step 2 - Checking prerequisites"
@@ -106,8 +150,32 @@ if ($claudeFound) {
     Write-Ok "claude CLI found"
 } else {
     Write-Warn "claude CLI not found in PATH"
-    Write-Host "       Install from: https://claude.ai/code"
-    Write-Host "       You can install it after setup and before running 'assistant start'."
+    Write-Host ""
+    $answer = Read-Host "  Would you like to install it now? [Y/n]"
+    if (-not $answer) { $answer = 'Y' }
+
+    if ($answer -match '^[Yy]') {
+        $npmFound = Get-Command npm -ErrorAction SilentlyContinue
+        if ($npmFound) {
+            Write-Host "  Installing Claude Code via npm..."
+            npm install -g @anthropic-ai/claude-code
+        } else {
+            Write-Warn "npm not found. Cannot auto-install Claude CLI."
+        }
+
+        $claudeFound = Get-Command claude -ErrorAction SilentlyContinue
+        if ($claudeFound) {
+            Write-Ok "claude CLI installed"
+        } else {
+            Write-Warn "Claude CLI install did not succeed."
+            Write-Host "       Install it manually from: https://claude.ai/code"
+            Write-Host "       You can install it after setup and before running 'assistant start'."
+        }
+    } else {
+        Write-Warn "Skipping Claude CLI install."
+        Write-Host "       Install it from: https://claude.ai/code"
+        Write-Host "       You can install it after setup and before running 'assistant start'."
+    }
 }
 
 # -- Step 3: Create venv ------------------------------------------------------

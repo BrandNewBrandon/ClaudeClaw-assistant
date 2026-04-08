@@ -39,32 +39,88 @@ echo -e "${BOLD}           Your AI assistant, locally hosted.                  $
 echo -e "${BOLD}  ╚═════════════════════════════════════════════════════════════╝${RESET}"
 echo
 
+# ── Helper: find a suitable Python ───────────────────────────────────────────
+find_python() {
+  PYTHON=""
+  for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null; then
+      version_minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null || echo 0)
+      version_major=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null || echo 0)
+      if [[ "$version_major" -eq 3 && "$version_minor" -ge "$PYTHON_MIN_MINOR" ]]; then
+        PYTHON="$candidate"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
 # ── Step 1: Find Python ──────────────────────────────────────────────────────
 step "Step 1 — Checking Python"
 
-PYTHON=""
-for candidate in python3.13 python3.12 python3.11 python3; do
-  if command -v "$candidate" &>/dev/null; then
-    version_minor=$("$candidate" -c 'import sys; print(sys.version_info.minor)' 2>/dev/null || echo 0)
-    version_major=$("$candidate" -c 'import sys; print(sys.version_info.major)' 2>/dev/null || echo 0)
-    if [[ "$version_major" -eq 3 && "$version_minor" -ge "$PYTHON_MIN_MINOR" ]]; then
-      PYTHON="$candidate"
-      break
+if find_python; then
+  PYTHON_VERSION=$("$PYTHON" --version 2>&1)
+  ok "Found $PYTHON_VERSION ($PYTHON)"
+else
+  warn "Python 3.${PYTHON_MIN_MINOR}+ not found."
+  echo
+  echo -n "  Would you like to install it now? [Y/n] "
+  read -r INSTALL_PYTHON
+  INSTALL_PYTHON="${INSTALL_PYTHON:-Y}"
+
+  if [[ "$INSTALL_PYTHON" =~ ^[Yy] ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+      # macOS — install via Homebrew
+      if ! command -v brew &>/dev/null; then
+        echo
+        echo "  Homebrew is required to install Python on macOS."
+        echo "  Installing Homebrew first..."
+        echo
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # Add Homebrew to PATH for this session
+        if [[ -f /opt/homebrew/bin/brew ]]; then
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+        elif [[ -f /usr/local/bin/brew ]]; then
+          eval "$(/usr/local/bin/brew shellenv)"
+        fi
+      fi
+      if command -v brew &>/dev/null; then
+        echo "  Installing Python 3.12 via Homebrew..."
+        brew install python@3.12
+      fi
+    else
+      # Linux — try apt or dnf
+      if command -v apt-get &>/dev/null; then
+        echo "  Installing Python 3.12 via apt..."
+        sudo apt-get update -qq && sudo apt-get install -y python3.12 python3.12-venv
+      elif command -v dnf &>/dev/null; then
+        echo "  Installing Python 3.12 via dnf..."
+        sudo dnf install -y python3.12
+      else
+        fail "Could not detect package manager (apt or dnf)."
+      fi
     fi
+
+    # Re-check after install
+    if find_python; then
+      PYTHON_VERSION=$("$PYTHON" --version 2>&1)
+      ok "Installed $PYTHON_VERSION ($PYTHON)"
+    else
+      fail "Python install did not succeed."
+      echo
+      echo "  Install manually from https://www.python.org/downloads/"
+      echo
+      exit 1
+    fi
+  else
+    echo
+    echo "  Install Python 3.${PYTHON_MIN_MINOR}+ from https://www.python.org/downloads/"
+    echo "  or via Homebrew:  brew install python@3.12"
+    echo "  Then re-run this installer."
+    echo
+    exit 1
   fi
-done
-
-if [[ -z "$PYTHON" ]]; then
-  fail "Python 3.${PYTHON_MIN_MINOR}+ not found."
-  echo
-  echo "  Install it from https://www.python.org/downloads/"
-  echo "  or via Homebrew:  brew install python@3.12"
-  echo
-  exit 1
 fi
-
-PYTHON_VERSION=$("$PYTHON" --version 2>&1)
-ok "Found $PYTHON_VERSION ($PYTHON)"
 
 # ── Step 2: Check claude CLI ─────────────────────────────────────────────────
 step "Step 2 — Checking prerequisites"
@@ -73,8 +129,34 @@ if command -v claude &>/dev/null; then
   ok "claude CLI found"
 else
   warn "claude CLI not found in PATH"
-  echo "       Install it from: https://claude.ai/code"
-  echo "       You can install it after setup and before running 'assistant start'."
+  echo
+  echo -n "  Would you like to install it now? [Y/n] "
+  read -r INSTALL_CLAUDE
+  INSTALL_CLAUDE="${INSTALL_CLAUDE:-Y}"
+
+  if [[ "$INSTALL_CLAUDE" =~ ^[Yy] ]]; then
+    if command -v npm &>/dev/null; then
+      echo "  Installing Claude Code via npm..."
+      npm install -g @anthropic-ai/claude-code
+    elif command -v brew &>/dev/null; then
+      echo "  Installing Claude Code via Homebrew..."
+      brew install claude
+    else
+      warn "Could not auto-install (no npm or brew found)."
+    fi
+
+    if command -v claude &>/dev/null; then
+      ok "claude CLI installed"
+    else
+      warn "Claude CLI install did not succeed."
+      echo "       Install it manually from: https://claude.ai/code"
+      echo "       You can install it after setup and before running 'assistant start'."
+    fi
+  else
+    warn "Skipping Claude CLI install."
+    echo "       Install it from: https://claude.ai/code"
+    echo "       You can install it after setup and before running 'assistant start'."
+  fi
 fi
 
 # ── Step 3: Create venv ──────────────────────────────────────────────────────
