@@ -59,12 +59,14 @@ class ClaudeCodeRunner:
         if session_id:
             command.extend(["--resume", session_id])
 
-        command.extend(["-p", prompt])
+        # Pass prompt via stdin to avoid OS command-line length limits (Windows 8191 char cap)
+        command.extend(["-p", "-"])
 
         try:
             completed = subprocess.run(
                 command,
                 cwd=str(cwd),
+                input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -137,12 +139,14 @@ class ClaudeCodeRunner:
         if session_id:
             command.extend(["--resume", session_id])
 
-        command.extend(["-p", prompt])
+        # Pass prompt via stdin to avoid OS command-line length limits (Windows 8191 char cap)
+        command.extend(["-p", "-"])
 
         try:
             proc = subprocess.Popen(
                 command,
                 cwd=str(cwd),
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -151,6 +155,13 @@ class ClaudeCodeRunner:
             )
         except OSError as exc:
             raise ModelRunnerError(f"Failed to execute Claude CLI: {exc}") from exc
+
+        # Write prompt to stdin and close it so Claude starts processing
+        try:
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+        except OSError:
+            pass
 
         # Kill the process if it exceeds the timeout
         _killed = threading.Event()
