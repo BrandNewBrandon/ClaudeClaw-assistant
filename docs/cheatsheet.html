@@ -12,91 +12,86 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     font-size: 13px;
     line-height: 1.5;
-    padding: 30px 24px;
-    overflow-x: hidden;
+    padding: 24px;
   }
   h1 {
     text-align: center;
-    font-size: 42px;
+    font-size: clamp(24px, 4vw, 42px);
     font-weight: 900;
     letter-spacing: 4px;
     text-transform: uppercase;
     color: #fff;
-    margin-bottom: 30px;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 12px;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 20px 20px;
-    overflow: hidden;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
   }
-  .section { margin-bottom: 8px; }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .section { margin-bottom: 12px; }
   h2 {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 2px;
     color: #ff6b6b;
     border-bottom: 1px solid #333;
-    padding-bottom: 4px;
-    margin-bottom: 8px;
+    padding-bottom: 3px;
+    margin-bottom: 6px;
   }
   h3 {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #888;
-    margin-top: 10px;
-    margin-bottom: 4px;
+    color: #666;
+    margin-top: 8px;
+    margin-bottom: 2px;
   }
   code, .cmd {
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 12px;
-  }
-  .grid > div:last-child .cmd {
-    font-size: 10px;
-  }
-  .grid > div:last-child .desc {
-    font-size: 9px;
-  }
-  .grid > div:last-child .path-table td:last-child {
-    font-size: 10px;
-  }
-  .grid > div:last-child .trouble-row .fix code {
-    font-size: 10px;
+    font-size: 11px;
   }
   .row {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
     padding: 1px 0;
-    gap: 6px;
+    gap: 8px;
   }
   .row .cmd {
     color: #fff;
     font-weight: 600;
     white-space: nowrap;
-    flex-shrink: 0;
   }
   .row .desc {
-    color: #888;
-    font-size: 11px;
-    text-align: right;
+    color: #555;
+    font-size: 10px;
     white-space: nowrap;
-    flex-shrink: 1;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .cmd-block {
     background: #1a1a1a;
     border-left: 3px solid #ff6b6b;
-    padding: 6px 10px;
-    margin: 6px 0;
+    padding: 4px 8px;
+    margin: 4px 0;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 10px;
     color: #ccc;
-    white-space: pre;
+    white-space: nowrap;
     overflow-x: auto;
   }
   .path-table {
@@ -106,75 +101,51 @@
   .path-table td {
     padding: 1px 0;
     vertical-align: top;
+    font-size: 10px;
   }
   .path-table td:first-child {
     color: #ff6b6b;
     font-weight: 600;
-    font-size: 11px;
     text-transform: uppercase;
-    width: 80px;
     white-space: nowrap;
     padding-right: 8px;
+    width: 1%;
   }
   .path-table td:last-child {
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 11px;
     color: #aaa;
     word-break: break-all;
   }
   .trouble-row {
     display: flex;
     align-items: baseline;
-    padding: 2px 0;
-    gap: 8px;
+    padding: 1px 0;
+    gap: 6px;
   }
   .trouble-row .problem {
     color: #ff6b6b;
     font-weight: 700;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     white-space: nowrap;
   }
   .trouble-row .fix {
     color: #aaa;
-    font-size: 11px;
+    font-size: 10px;
   }
   .trouble-row .fix code {
     color: #fff;
-    font-size: 11px;
-  }
-  .tag {
-    display: inline-block;
-    background: #ff6b6b;
-    color: #111;
     font-size: 10px;
-    font-weight: 800;
-    padding: 1px 5px;
-    border-radius: 2px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .divider {
-    grid-column: 1 / -1;
-    border-top: 1px solid #222;
-    margin: 4px 0;
   }
   .tree {
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 11px;
+    font-size: 10px;
     color: #aaa;
-    line-height: 1.6;
+    line-height: 1.5;
+    white-space: pre;
   }
   .tree .file { color: #fff; }
   .tree .comment { color: #555; }
-  .subtitle {
-    text-align: center;
-    color: #555;
-    font-size: 12px;
-    margin-top: -22px;
-    margin-bottom: 24px;
-    letter-spacing: 1px;
-  }
 </style>
 </head>
 <body>
@@ -185,44 +156,43 @@
 <div class="grid">
 
   <!-- COLUMN 1 -->
-
   <div>
     <div class="section">
       <h2>CLI Commands</h2>
 
       <h3>Setup &amp; Config</h3>
-      <div class="row"><span class="cmd">assistant init</span><span class="desc">Setup wizard</span></div>
-      <div class="row"><span class="cmd">assistant configure</span><span class="desc">Change settings</span></div>
-      <div class="row"><span class="cmd">assistant doctor</span><span class="desc">Health check</span></div>
-      <div class="row"><span class="cmd">assistant doctor --fix</span><span class="desc">Auto-repair</span></div>
-      <div class="row"><span class="cmd">assistant update</span><span class="desc">Pull latest + deps</span></div>
-      <div class="row"><span class="cmd">assistant uninstall</span><span class="desc">Remove everything</span></div>
-      <div class="row"><span class="cmd">assistant completion</span><span class="desc">Shell tab-completion</span></div>
+      <div class="row"><span class="cmd">assistant init</span><span class="desc">setup wizard</span></div>
+      <div class="row"><span class="cmd">assistant configure</span><span class="desc">change settings</span></div>
+      <div class="row"><span class="cmd">assistant doctor</span><span class="desc">health check</span></div>
+      <div class="row"><span class="cmd">assistant doctor --fix</span><span class="desc">auto-repair</span></div>
+      <div class="row"><span class="cmd">assistant update</span><span class="desc">pull + deps</span></div>
+      <div class="row"><span class="cmd">assistant uninstall</span><span class="desc">remove all</span></div>
+      <div class="row"><span class="cmd">assistant completion</span><span class="desc">tab-completion</span></div>
 
-      <h3>Runtime Control</h3>
-      <div class="row"><span class="cmd">assistant start</span><span class="desc">Start runtime</span></div>
-      <div class="row"><span class="cmd">assistant stop</span><span class="desc">Stop runtime</span></div>
-      <div class="row"><span class="cmd">assistant restart</span><span class="desc">Stop + start</span></div>
-      <div class="row"><span class="cmd">assistant status</span><span class="desc">Check if running</span></div>
-      <div class="row"><span class="cmd">assistant daemon install</span><span class="desc">Autostart on login</span></div>
-      <div class="row"><span class="cmd">assistant daemon uninstall</span><span class="desc">Remove autostart</span></div>
+      <h3>Runtime</h3>
+      <div class="row"><span class="cmd">assistant start</span></div>
+      <div class="row"><span class="cmd">assistant stop</span></div>
+      <div class="row"><span class="cmd">assistant restart</span></div>
+      <div class="row"><span class="cmd">assistant status</span></div>
+      <div class="row"><span class="cmd">assistant daemon install</span><span class="desc">autostart</span></div>
+      <div class="row"><span class="cmd">assistant daemon uninstall</span></div>
 
       <h3>Agents</h3>
-      <div class="row"><span class="cmd">assistant add &lt;name&gt;</span><span class="desc">Create agent</span></div>
-      <div class="row"><span class="cmd">assistant list-agents</span><span class="desc">List all</span></div>
-      <div class="row"><span class="cmd">assistant show &lt;name&gt;</span><span class="desc">Agent details</span></div>
-      <div class="row"><span class="cmd">assistant clone &lt;s&gt; &lt;d&gt;</span><span class="desc">Copy agent</span></div>
-      <div class="row"><span class="cmd">assistant rename &lt;o&gt; &lt;n&gt;</span><span class="desc">Rename agent</span></div>
-      <div class="row"><span class="cmd">assistant delete &lt;name&gt;</span><span class="desc">Archive agent</span></div>
-      <div class="row"><span class="cmd">assistant restore &lt;name&gt;</span><span class="desc">Restore agent</span></div>
-      <div class="row"><span class="cmd">assistant hatch</span><span class="desc">Bootstrap conversation</span></div>
+      <div class="row"><span class="cmd">assistant add &lt;name&gt;</span></div>
+      <div class="row"><span class="cmd">assistant list-agents</span></div>
+      <div class="row"><span class="cmd">assistant show &lt;name&gt;</span></div>
+      <div class="row"><span class="cmd">assistant clone &lt;src&gt; &lt;dst&gt;</span></div>
+      <div class="row"><span class="cmd">assistant rename &lt;old&gt; &lt;new&gt;</span></div>
+      <div class="row"><span class="cmd">assistant delete &lt;name&gt;</span></div>
+      <div class="row"><span class="cmd">assistant restore &lt;name&gt;</span></div>
+      <div class="row"><span class="cmd">assistant hatch</span><span class="desc">bootstrap</span></div>
 
       <h3>Tools</h3>
-      <div class="row"><span class="cmd">assistant chat</span><span class="desc">Terminal chat</span></div>
-      <div class="row"><span class="cmd">assistant chat --agent &lt;n&gt;</span><span class="desc">Chat with specific agent</span></div>
-      <div class="row"><span class="cmd">assistant ui</span><span class="desc">Web dashboard</span></div>
-      <div class="row"><span class="cmd">assistant logs</span><span class="desc">Tail runtime log</span></div>
-      <div class="row"><span class="cmd">assistant mcp</span><span class="desc">MCP stdio server</span></div>
+      <div class="row"><span class="cmd">assistant chat</span><span class="desc">terminal chat</span></div>
+      <div class="row"><span class="cmd">assistant chat --agent &lt;n&gt;</span></div>
+      <div class="row"><span class="cmd">assistant ui</span><span class="desc">web dashboard</span></div>
+      <div class="row"><span class="cmd">assistant logs</span><span class="desc">tail log</span></div>
+      <div class="row"><span class="cmd">assistant mcp</span><span class="desc">MCP stdio</span></div>
       <div class="row"><span class="cmd">assistant pair</span><span class="desc">DM pairing</span></div>
     </div>
 
@@ -236,68 +206,63 @@
   </div>
 
   <!-- COLUMN 2 -->
-
   <div>
     <div class="section">
       <h2>In-Chat Commands</h2>
 
       <h3>Session</h3>
-      <div class="row"><span class="cmd">/new</span><span class="desc">Fresh session</span></div>
-      <div class="row"><span class="cmd">/compact</span><span class="desc">Compress context</span></div>
-      <div class="row"><span class="cmd">/transcript [n]</span><span class="desc">Last n messages</span></div>
-      <div class="row"><span class="cmd">/status</span><span class="desc">Health + context</span></div>
+      <div class="row"><span class="cmd">/new</span><span class="desc">fresh session</span></div>
+      <div class="row"><span class="cmd">/compact</span><span class="desc">compress context</span></div>
+      <div class="row"><span class="cmd">/transcript [n]</span><span class="desc">last n messages</span></div>
+      <div class="row"><span class="cmd">/status</span><span class="desc">health + context</span></div>
 
       <h3>Agents</h3>
-      <div class="row"><span class="cmd">/agents</span><span class="desc">List all agents</span></div>
-      <div class="row"><span class="cmd">/agent</span><span class="desc">Current agent info</span></div>
-      <div class="row"><span class="cmd">/agent info &lt;n&gt;</span><span class="desc">Agent details</span></div>
-      <div class="row"><span class="cmd">/agent switch &lt;n&gt;</span><span class="desc">Switch agent</span></div>
-      <div class="row"><span class="cmd">/model [name]</span><span class="desc">Show/change model</span></div>
-      <div class="row"><span class="cmd">/effort [level]</span><span class="desc">Show/change effort</span></div>
+      <div class="row"><span class="cmd">/agents</span><span class="desc">list all</span></div>
+      <div class="row"><span class="cmd">/agent</span><span class="desc">current info</span></div>
+      <div class="row"><span class="cmd">/agent info &lt;n&gt;</span></div>
+      <div class="row"><span class="cmd">/agent switch &lt;n&gt;</span></div>
+      <div class="row"><span class="cmd">/model [name]</span><span class="desc">show/change</span></div>
+      <div class="row"><span class="cmd">/effort [level]</span><span class="desc">show/change</span></div>
 
       <h3>Memory</h3>
-      <div class="row"><span class="cmd">/remember &lt;text&gt;</span><span class="desc">Save to daily notes</span></div>
-      <div class="row"><span class="cmd">/note &lt;text&gt;</span><span class="desc">Alias for /remember</span></div>
-      <div class="row"><span class="cmd">/memory</span><span class="desc">Show memory snippets</span></div>
-      <div class="row"><span class="cmd">/consolidate [days]</span><span class="desc">Merge into MEMORY.md</span></div>
+      <div class="row"><span class="cmd">/remember &lt;text&gt;</span><span class="desc">save note</span></div>
+      <div class="row"><span class="cmd">/note &lt;text&gt;</span><span class="desc">alias</span></div>
+      <div class="row"><span class="cmd">/memory</span><span class="desc">show snippets</span></div>
+      <div class="row"><span class="cmd">/consolidate [days]</span><span class="desc">merge notes</span></div>
 
       <h3>Scheduling</h3>
-      <div class="row"><span class="cmd">/remind &lt;time&gt; &lt;msg&gt;</span><span class="desc">Set reminder</span></div>
-      <div class="row"><span class="cmd">/tasks</span><span class="desc">Pending tasks</span></div>
-      <div class="row"><span class="cmd">/cancel &lt;id&gt;</span><span class="desc">Cancel task</span></div>
-      <div class="row"><span class="cmd">/quiet [on|off|set]</span><span class="desc">Quiet hours</span></div>
-      <div class="row"><span class="cmd">/briefing [now|on|off]</span><span class="desc">Briefing config</span></div>
+      <div class="row"><span class="cmd">/remind &lt;time&gt; &lt;msg&gt;</span></div>
+      <div class="row"><span class="cmd">/tasks</span><span class="desc">pending</span></div>
+      <div class="row"><span class="cmd">/cancel &lt;id&gt;</span></div>
+      <div class="row"><span class="cmd">/quiet [on|off|set]</span></div>
+      <div class="row"><span class="cmd">/briefing [now|on|off]</span></div>
 
       <h3>Info</h3>
-      <div class="row"><span class="cmd">/tools</span><span class="desc">Available tools</span></div>
-      <div class="row"><span class="cmd">/skills</span><span class="desc">Installed skills</span></div>
-      <div class="row"><span class="cmd">/hooks</span><span class="desc">Hook registry</span></div>
-      <div class="row"><span class="cmd">/search &lt;query&gt;</span><span class="desc">Web search</span></div>
-      <div class="row"><span class="cmd">/help</span><span class="desc">Show all commands</span></div>
+      <div class="row"><span class="cmd">/tools</span><span class="desc">available tools</span></div>
+      <div class="row"><span class="cmd">/skills</span><span class="desc">installed skills</span></div>
+      <div class="row"><span class="cmd">/hooks</span><span class="desc">hook registry</span></div>
+      <div class="row"><span class="cmd">/search &lt;query&gt;</span><span class="desc">web search</span></div>
+      <div class="row"><span class="cmd">/help</span><span class="desc">all commands</span></div>
     </div>
 
     <div class="section">
       <h2>Agent Directory</h2>
-      <div class="tree">
-agents/&lt;name&gt;/
-  <span class="file">agent.json</span>       <span class="comment"># model, effort, display_name</span>
-  <span class="file">AGENT.md</span>         <span class="comment"># personality / system prompt</span>
-  <span class="file">USER.md</span>          <span class="comment"># user context</span>
-  <span class="file">MEMORY.md</span>        <span class="comment"># long-term notes</span>
-  <span class="file">TOOLS.md</span>         <span class="comment"># tool integrations</span>
-  <span class="file">BOOTSTRAP.md</span>     <span class="comment"># first-run script</span>
-  memory/          <span class="comment"># daily notes (YYYY-MM-DD.md)</span>
-  sessions/        <span class="comment"># session transcripts</span>
-      </div>
+      <div class="tree"><span class="file">agent.json</span>     <span class="comment"># model, effort, name</span>
+<span class="file">AGENT.md</span>       <span class="comment"># personality / prompt</span>
+<span class="file">USER.md</span>        <span class="comment"># user context</span>
+<span class="file">MEMORY.md</span>      <span class="comment"># long-term notes</span>
+<span class="file">TOOLS.md</span>       <span class="comment"># tool integrations</span>
+<span class="file">BOOTSTRAP.md</span>   <span class="comment"># first-run script</span>
+memory/        <span class="comment"># daily (YYYY-MM-DD.md)</span>
+sessions/      <span class="comment"># transcripts</span></div>
     </div>
   </div>
 
   <!-- COLUMN 3 -->
-
   <div>
     <div class="section">
       <h2>Config Fields</h2>
-      <p style="color:#555;font-size:10px;margin-bottom:6px;">config.json</p>
+      <p style="color:#555;font-size:9px;margin-bottom:4px;">config.json</p>
 
       <h3>Core</h3>
       <div class="row"><span class="cmd">default_agent</span></div>
@@ -340,7 +305,7 @@ agents/&lt;name&gt;/
         <tr><td>Logs</td><td>%APPDATA%\assistant\logs\</td></tr>
         <tr><td>Project</td><td>%USERPROFILE%\ClaudeClaw\</td></tr>
       </table>
-      <p style="color:#555;font-size:10px;margin-top:6px;">Override: <code>ASSISTANT_APP_ROOT</code></p>
+      <p style="color:#555;font-size:9px;margin-top:4px;">Override: set <code style="font-size:9px;">ASSISTANT_APP_ROOT</code></p>
     </div>
 
     <div class="section">
@@ -357,9 +322,9 @@ agents/&lt;name&gt;/
 
     <div class="section">
       <h2>Dashboard</h2>
-      <div class="row"><span class="cmd">assistant ui</span><span class="desc">localhost:18790</span></div>
-      <div class="row"><span class="cmd">--port 3000</span><span class="desc">custom port</span></div>
-      <div class="row"><span class="cmd">--host 0.0.0.0</span><span class="desc">expose on network</span></div>
+      <div class="row"><span class="cmd">assistant ui</span><span class="desc">:18790</span></div>
+      <div class="row"><span class="cmd">--port 3000</span><span class="desc">custom</span></div>
+      <div class="row"><span class="cmd">--host 0.0.0.0</span><span class="desc">network</span></div>
     </div>
   </div>
 
