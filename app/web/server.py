@@ -1,6 +1,6 @@
 """Web dashboard server for assistant-runtime.
 
-Serves a Bootstrap 5 dashboard at http://localhost:18789 (OpenClaw convention).
+Serves a Bootstrap 5 dashboard at http://localhost:18790.
 Uses only stdlib — no external web framework required.
 
 Endpoints
@@ -39,7 +39,7 @@ LOGGER = logging.getLogger(__name__)
 _UPSTREAM_SCRIPT = Path(__file__).parent.parent.parent / "scripts" / "check_upstream.py"
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 18789
+DEFAULT_PORT = 18790
 
 # ---------------------------------------------------------------------------
 # HTML template

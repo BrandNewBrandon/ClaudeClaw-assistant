@@ -75,9 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("-n", "--lines", type=int, default=50, help="Lines of history to show (default: 50)")
     logs_parser.add_argument("--no-follow", action="store_true", help="Print last N lines and exit (don't tail)")
 
-    ui_parser = subparsers.add_parser("ui", help="Start the web dashboard at localhost:18789")
+    ui_parser = subparsers.add_parser("ui", help="Start the web dashboard at localhost:18790")
     ui_parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-    ui_parser.add_argument("--port", type=int, default=18789, help="Bind port (default: 18789)")
+    ui_parser.add_argument("--port", type=int, default=18790, help="Bind port (default: 18790)")
 
     subparsers.add_parser("mcp", help="Start the MCP stdio server")
 
@@ -125,7 +125,7 @@ def _print_quick_help() -> None:
     print("  assistant daemon status     Show autostart registration")
     print("  assistant chat              Chat with an agent in the terminal")
     print("  assistant chat --agent <n>  Chat with a specific agent")
-    print("  assistant ui                Open web dashboard (localhost:18789)")
+    print("  assistant ui                Open web dashboard (localhost:18790)")
     print("  assistant mcp               Start MCP stdio server")
     print("  assistant add <name>        Create a new agent (interactive wizard)")
     print("  assistant list-agents       List all agents")
