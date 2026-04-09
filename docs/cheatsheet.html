@@ -32,14 +32,15 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    grid-template-columns: auto auto auto;
+    gap: 8px 32px;
+    justify-content: center;
   }
   @media (max-width: 900px) {
-    .grid { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: auto auto; }
   }
   @media (max-width: 560px) {
-    .grid { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: auto; }
   }
   .section { margin-bottom: 12px; }
   h2 {
@@ -93,6 +94,7 @@
     color: #ccc;
     white-space: nowrap;
     overflow-x: auto;
+    max-width: 420px;
   }
   .path-table {
     width: 100%;
