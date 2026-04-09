@@ -3,6 +3,8 @@
 A personal AI assistant that runs on your computer and connects to your messaging apps.
 It uses Claude (Anthropic's AI) as its brain and keeps its own memory between conversations.
 
+> **Quick reference:** See the [Cheat Sheet](docs/cheatsheet.md) for a compact command reference.
+
 ---
 
 ## Table of Contents
@@ -498,7 +500,7 @@ Start it with:
 assistant ui
 ```
 
-Then open **http://localhost:18789** in your browser.
+Then open **http://localhost:18790** in your browser.
 
 ### Dashboard tabs
 
