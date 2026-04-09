@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeClaw Cheat Sheet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 30px 24px;
+    overflow-x: hidden;
+  }
+  h1 {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-bottom: 30px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px 20px;
+    overflow: hidden;
+  }
+  .section { margin-bottom: 8px; }
+  h2 {
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #ff6b6b;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+  h3 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+  code, .cmd {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+  }
+  .grid > div:last-child .cmd {
+    font-size: 10px;
+  }
+  .grid > div:last-child .desc {
+    font-size: 9px;
+  }
+  .grid > div:last-child .path-table td:last-child {
+    font-size: 10px;
+  }
+  .grid > div:last-child .trouble-row .fix code {
+    font-size: 10px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 1px 0;
+    gap: 6px;
+  }
+  .row .cmd {
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .row .desc {
+    color: #888;
+    font-size: 11px;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cmd-block {
+    background: #1a1a1a;
+    border-left: 3px solid #ff6b6b;
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: #ccc;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .path-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .path-table td {
+    padding: 1px 0;
+    vertical-align: top;
+  }
+  .path-table td:first-child {
+    color: #ff6b6b;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    width: 80px;
+    white-space: nowrap;
+    padding-right: 8px;
+  }
+  .path-table td:last-child {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: #aaa;
+    word-break: break-all;
+  }
+  .trouble-row {
+    display: flex;
+    align-items: baseline;
+    padding: 2px 0;
+    gap: 8px;
+  }
+  .trouble-row .problem {
+    color: #ff6b6b;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .trouble-row .fix {
+    color: #aaa;
+    font-size: 11px;
+  }
+  .trouble-row .fix code {
+    color: #fff;
+    font-size: 11px;
+  }
+  .tag {
+    display: inline-block;
+    background: #ff6b6b;
+    color: #111;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .divider {
+    grid-column: 1 / -1;
+    border-top: 1px solid #222;
+    margin: 4px 0;
+  }
+  .tree {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: #aaa;
+    line-height: 1.6;
+  }
+  .tree .file { color: #fff; }
+  .tree .comment { color: #555; }
+  .subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 12px;
+    margin-top: -22px;
+    margin-bottom: 24px;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Cheat Sheet</h1>
+<p class="subtitle">ClaudeClaw &mdash; Your AI assistant, locally hosted.</p>
+
+<div class="grid">
+
+  <!-- COLUMN 1 -->
+
+  <div>
+    <div class="section">
+      <h2>CLI Commands</h2>
+
+      <h3>Setup &amp; Config</h3>
+      <div class="row"><span class="cmd">assistant init</span><span class="desc">Setup wizard</span></div>
+      <div class="row"><span class="cmd">assistant configure</span><span class="desc">Change settings</span></div>
+      <div class="row"><span class="cmd">assistant doctor</span><span class="desc">Health check</span></div>
+      <div class="row"><span class="cmd">assistant doctor --fix</span><span class="desc">Auto-repair</span></div>
+      <div class="row"><span class="cmd">assistant update</span><span class="desc">Pull latest + deps</span></div>
+      <div class="row"><span class="cmd">assistant uninstall</span><span class="desc">Remove everything</span></div>
+      <div class="row"><span class="cmd">assistant completion</span><span class="desc">Shell tab-completion</span></div>
+
+      <h3>Runtime Control</h3>
+      <div class="row"><span class="cmd">assistant start</span><span class="desc">Start runtime</span></div>
+      <div class="row"><span class="cmd">assistant stop</span><span class="desc">Stop runtime</span></div>
+      <div class="row"><span class="cmd">assistant restart</span><span class="desc">Stop + start</span></div>
+      <div class="row"><span class="cmd">assistant status</span><span class="desc">Check if running</span></div>
+      <div class="row"><span class="cmd">assistant daemon install</span><span class="desc">Autostart on login</span></div>
+      <div class="row"><span class="cmd">assistant daemon uninstall</span><span class="desc">Remove autostart</span></div>
+
+      <h3>Agents</h3>
+      <div class="row"><span class="cmd">assistant add &lt;name&gt;</span><span class="desc">Create agent</span></div>
+      <div class="row"><span class="cmd">assistant list-agents</span><span class="desc">List all</span></div>
+      <div class="row"><span class="cmd">assistant show &lt;name&gt;</span><span class="desc">Agent details</span></div>
+      <div class="row"><span class="cmd">assistant clone &lt;s&gt; &lt;d&gt;</span><span class="desc">Copy agent</span></div>
+      <div class="row"><span class="cmd">assistant rename &lt;o&gt; &lt;n&gt;</span><span class="desc">Rename agent</span></div>
+      <div class="row"><span class="cmd">assistant delete &lt;name&gt;</span><span class="desc">Archive agent</span></div>
+      <div class="row"><span class="cmd">assistant restore &lt;name&gt;</span><span class="desc">Restore agent</span></div>
+      <div class="row"><span class="cmd">assistant hatch</span><span class="desc">Bootstrap conversation</span></div>
+
+      <h3>Tools</h3>
+      <div class="row"><span class="cmd">assistant chat</span><span class="desc">Terminal chat</span></div>
+      <div class="row"><span class="cmd">assistant chat --agent &lt;n&gt;</span><span class="desc">Chat with specific agent</span></div>
+      <div class="row"><span class="cmd">assistant ui</span><span class="desc">Web dashboard</span></div>
+      <div class="row"><span class="cmd">assistant logs</span><span class="desc">Tail runtime log</span></div>
+      <div class="row"><span class="cmd">assistant mcp</span><span class="desc">MCP stdio server</span></div>
+      <div class="row"><span class="cmd">assistant pair</span><span class="desc">DM pairing</span></div>
+    </div>
+
+    <div class="section">
+      <h2>Quick Install</h2>
+      <h3>Mac / Linux</h3>
+      <div class="cmd-block">git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh</div>
+      <h3>Windows (PowerShell)</h3>
+      <div class="cmd-block">git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\ClaudeClaw\assistant; &amp; "$HOME\ClaudeClaw\assistant\install.ps1"</div>
+    </div>
+  </div>
+
+  <!-- COLUMN 2 -->
+
+  <div>
+    <div class="section">
+      <h2>In-Chat Commands</h2>
+
+      <h3>Session</h3>
+      <div class="row"><span class="cmd">/new</span><span class="desc">Fresh session</span></div>
+      <div class="row"><span class="cmd">/compact</span><span class="desc">Compress context</span></div>
+      <div class="row"><span class="cmd">/transcript [n]</span><span class="desc">Last n messages</span></div>
+      <div class="row"><span class="cmd">/status</span><span class="desc">Health + context</span></div>
+
+      <h3>Agents</h3>
+      <div class="row"><span class="cmd">/agents</span><span class="desc">List all agents</span></div>
+      <div class="row"><span class="cmd">/agent</span><span class="desc">Current agent info</span></div>
+      <div class="row"><span class="cmd">/agent info &lt;n&gt;</span><span class="desc">Agent details</span></div>
+      <div class="row"><span class="cmd">/agent switch &lt;n&gt;</span><span class="desc">Switch agent</span></div>
+      <div class="row"><span class="cmd">/model [name]</span><span class="desc">Show/change model</span></div>
+      <div class="row"><span class="cmd">/effort [level]</span><span class="desc">Show/change effort</span></div>
+
+      <h3>Memory</h3>
+      <div class="row"><span class="cmd">/remember &lt;text&gt;</span><span class="desc">Save to daily notes</span></div>
+      <div class="row"><span class="cmd">/note &lt;text&gt;</span><span class="desc">Alias for /remember</span></div>
+      <div class="row"><span class="cmd">/memory</span><span class="desc">Show memory snippets</span></div>
+      <div class="row"><span class="cmd">/consolidate [days]</span><span class="desc">Merge into MEMORY.md</span></div>
+
+      <h3>Scheduling</h3>
+      <div class="row"><span class="cmd">/remind &lt;time&gt; &lt;msg&gt;</span><span class="desc">Set reminder</span></div>
+      <div class="row"><span class="cmd">/tasks</span><span class="desc">Pending tasks</span></div>
+      <div class="row"><span class="cmd">/cancel &lt;id&gt;</span><span class="desc">Cancel task</span></div>
+      <div class="row"><span class="cmd">/quiet [on|off|set]</span><span class="desc">Quiet hours</span></div>
+      <div class="row"><span class="cmd">/briefing [now|on|off]</span><span class="desc">Briefing config</span></div>
+
+      <h3>Info</h3>
+      <div class="row"><span class="cmd">/tools</span><span class="desc">Available tools</span></div>
+      <div class="row"><span class="cmd">/skills</span><span class="desc">Installed skills</span></div>
+      <div class="row"><span class="cmd">/hooks</span><span class="desc">Hook registry</span></div>
+      <div class="row"><span class="cmd">/search &lt;query&gt;</span><span class="desc">Web search</span></div>
+      <div class="row"><span class="cmd">/help</span><span class="desc">Show all commands</span></div>
+    </div>
+
+    <div class="section">
+      <h2>Agent Directory</h2>
+      <div class="tree">
+agents/&lt;name&gt;/
+  <span class="file">agent.json</span>       <span class="comment"># model, effort, display_name</span>
+  <span class="file">AGENT.md</span>         <span class="comment"># personality / system prompt</span>
+  <span class="file">USER.md</span>          <span class="comment"># user context</span>
+  <span class="file">MEMORY.md</span>        <span class="comment"># long-term notes</span>
+  <span class="file">TOOLS.md</span>         <span class="comment"># tool integrations</span>
+  <span class="file">BOOTSTRAP.md</span>     <span class="comment"># first-run script</span>
+  memory/          <span class="comment"># daily notes (YYYY-MM-DD.md)</span>
+  sessions/        <span class="comment"># session transcripts</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLUMN 3 -->
+
+  <div>
+    <div class="section">
+      <h2>Config Fields</h2>
+      <p style="color:#555;font-size:10px;margin-bottom:6px;">config.json</p>
+
+      <h3>Core</h3>
+      <div class="row"><span class="cmd">default_agent</span></div>
+      <div class="row"><span class="cmd">model_provider</span></div>
+      <div class="row"><span class="cmd">claude_model</span></div>
+      <div class="row"><span class="cmd">claude_effort</span></div>
+      <div class="row"><span class="cmd">max_prompt_chars</span></div>
+      <div class="row"><span class="cmd">claude_timeout_seconds</span></div>
+
+      <h3>Features</h3>
+      <div class="row"><span class="cmd">cache_enabled</span></div>
+      <div class="row"><span class="cmd">cache_ttl_seconds</span></div>
+      <div class="row"><span class="cmd">compaction_enabled</span></div>
+      <div class="row"><span class="cmd">pairing_enabled</span></div>
+      <div class="row"><span class="cmd">consolidation_enabled</span></div>
+      <div class="row"><span class="cmd">semantic_search_enabled</span></div>
+      <div class="row"><span class="cmd">briefing_enabled</span></div>
+      <div class="row"><span class="cmd">briefing_times</span></div>
+      <div class="row"><span class="cmd">quiet_hours_start</span></div>
+      <div class="row"><span class="cmd">quiet_hours_end</span></div>
+      <div class="row"><span class="cmd">dashboard_token</span></div>
+      <div class="row"><span class="cmd">cooldown_seconds_per_chat</span></div>
+    </div>
+
+    <div class="section">
+      <h2>Key Paths</h2>
+      <h3>Mac / Linux</h3>
+      <table class="path-table">
+        <tr><td>Config</td><td>~/Library/.../assistant/config/</td></tr>
+        <tr><td>Agents</td><td>.../config/agents/</td></tr>
+        <tr><td>Data</td><td>~/Library/.../assistant/data/</td></tr>
+        <tr><td>State</td><td>~/Library/.../assistant/state/</td></tr>
+        <tr><td>Logs</td><td>~/Library/Logs/assistant/</td></tr>
+        <tr><td>Project</td><td>~/ClaudeClaw/assistant/</td></tr>
+      </table>
+      <h3>Windows</h3>
+      <table class="path-table">
+        <tr><td>Config</td><td>%APPDATA%\assistant\config\</td></tr>
+        <tr><td>Agents</td><td>..\config\agents\</td></tr>
+        <tr><td>Logs</td><td>%APPDATA%\assistant\logs\</td></tr>
+        <tr><td>Project</td><td>%USERPROFILE%\ClaudeClaw\</td></tr>
+      </table>
+      <p style="color:#555;font-size:10px;margin-top:6px;">Override: <code>ASSISTANT_APP_ROOT</code></p>
+    </div>
+
+    <div class="section">
+      <h2>Troubleshooting</h2>
+      <div class="trouble-row"><span class="problem">No DM Reply</span><span class="fix"><code>pair --list</code></span></div>
+      <div class="trouble-row"><span class="problem">Silent in Group</span><span class="fix">@mention bot</span></div>
+      <div class="trouble-row"><span class="problem">Won't Start</span><span class="fix"><code>status</code> &rarr; PID</span></div>
+      <div class="trouble-row"><span class="problem">Config Error</span><span class="fix"><code>doctor --fix</code></span></div>
+      <div class="trouble-row"><span class="problem">No Claude</span><span class="fix">install CLI</span></div>
+      <div class="trouble-row"><span class="problem">Cmd Too Long</span><span class="fix"><code>update</code></span></div>
+      <div class="trouble-row"><span class="problem">Dashboard</span><span class="fix"><code>--port 18791</code></span></div>
+      <div class="trouble-row"><span class="problem">Stale Session</span><span class="fix"><code>/new</code></span></div>
+    </div>
+
+    <div class="section">
+      <h2>Dashboard</h2>
+      <div class="row"><span class="cmd">assistant ui</span><span class="desc">localhost:18790</span></div>
+      <div class="row"><span class="cmd">--port 3000</span><span class="desc">custom port</span></div>
+      <div class="row"><span class="cmd">--host 0.0.0.0</span><span class="desc">expose on network</span></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
