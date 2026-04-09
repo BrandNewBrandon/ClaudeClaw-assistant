@@ -84,12 +84,12 @@ Open a terminal and paste one command:
 
 **Mac / Linux:**
 ```bash
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git $HOME\ClaudeClaw\assistant; & "$HOME\ClaudeClaw\assistant\install.ps1"
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\ClaudeClaw\assistant; & "$HOME\ClaudeClaw\assistant\install.ps1"
 ```
 
 This clones the project and runs the installer in one step. The setup wizard starts automatically at the end.
@@ -690,7 +690,7 @@ The uninstall wizard walks you through removing each component:
 After uninstalling, do a fresh install with:
 
 ```bash
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
 ```
 
 ---

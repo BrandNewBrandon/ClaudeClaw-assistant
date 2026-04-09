@@ -1,4 +1,4 @@
-# install.ps1 - one-command installer for assistant-runtime (Windows)
+# install.ps1 - one-command installer for ClaudeClaw-assistant (Windows)
 #
 # Usage (from PowerShell in the project folder):
 #   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — one-command installer for assistant-runtime
+# install.sh — one-command installer for ClaudeClaw-assistant
 #
 # Usage:
 #   cd ~/ClaudeClaw/assistant

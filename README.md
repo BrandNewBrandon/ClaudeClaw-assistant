@@ -425,12 +425,12 @@ Manual testing is still useful for:
 
 **Mac/Linux:**
 ```bash
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git ~/ClaudeClaw/assistant && bash ~/ClaudeClaw/assistant/install.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git $HOME\ClaudeClaw\assistant; & "$HOME\ClaudeClaw\assistant\install.ps1"
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\ClaudeClaw\assistant; & "$HOME\ClaudeClaw\assistant\install.ps1"
 ```
 
 ### Step-by-step install
@@ -439,14 +439,14 @@ If you prefer to do it in separate steps:
 
 **Mac/Linux:**
 ```bash
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git ~/ClaudeClaw/assistant
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git ~/ClaudeClaw/assistant
 cd ~/ClaudeClaw/assistant
 ./install.sh
 ```
 
 **Windows:**
 ```
-git clone https://github.com/BrandNewBrandon/assistant-runtime.git %USERPROFILE%\ClaudeClaw\assistant
+git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git %USERPROFILE%\ClaudeClaw\assistant
 cd %USERPROFILE%\ClaudeClaw\assistant
 & ".\Windows Install.bat"
 ```
