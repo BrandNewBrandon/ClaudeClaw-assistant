@@ -51,3 +51,26 @@ def test_web_request_heuristic_detects_obvious_requests() -> None:
     assert is_obvious_web_request("search the web for OpenClaw docs") is True
     assert is_obvious_web_request("fetch https://docs.openclaw.ai") is True
     assert is_obvious_web_request("what's our current routing config?") is False
+
+
+def test_disk_usage_returns_usage_for_real_path(tmp_path) -> None:
+    registry = build_default_registry(tmp_path)
+    result = registry.execute(ToolCall(name="disk_usage", arguments={"path": str(tmp_path)}))
+    assert result.ok is True
+    assert "Total:" in result.output
+    assert "Used:" in result.output
+    assert "Free:" in result.output
+
+
+def test_disk_usage_expands_tilde() -> None:
+    registry = build_default_registry()
+    result = registry.execute(ToolCall(name="disk_usage", arguments={"path": "~"}))
+    assert result.ok is True
+    assert "Total:" in result.output
+
+
+def test_disk_usage_handles_missing_path() -> None:
+    registry = build_default_registry()
+    result = registry.execute(ToolCall(name="disk_usage", arguments={"path": "/nonexistent/path/xyz"}))
+    assert result.ok is True
+    assert "not found" in result.output.lower()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.parse
 import urllib.request
@@ -156,6 +157,14 @@ def build_default_registry(working_directory: str | Path | None = None) -> ToolR
         ),
         _list_dir,
     )
+    registry.register(
+        ToolSpec(
+            name="disk_usage",
+            description="Return disk usage (total, used, free) for the filesystem at the given path.",
+            arguments={"path": "filesystem path to check (e.g. '/' or '~')"},
+        ),
+        _disk_usage,
+    )
     _cwd = str(working_directory) if working_directory else None
     registry.register(
         ToolSpec(
@@ -229,6 +238,27 @@ def _web_fetch(arguments: dict[str, Any]) -> str:
     if len(text) > 4000:
         text = text[:4000].rstrip() + "\n...[truncated]"
     return text or "(empty page)"
+
+
+def _disk_usage(args: dict[str, Any]) -> str:
+    raw = _require_string(args, "path")
+    path = Path(raw).expanduser()
+    if not path.exists():
+        return f"Path not found: {raw}"
+    try:
+        usage = shutil.disk_usage(path)
+    except OSError as exc:
+        return f"Error reading disk usage: {exc}"
+    total_gb = usage.total / 1e9
+    used_gb = usage.used / 1e9
+    free_gb = usage.free / 1e9
+    pct = usage.used / usage.total * 100
+    return (
+        f"Disk usage at {path}\n"
+        f"  Total: {total_gb:.1f} GB\n"
+        f"  Used:  {used_gb:.1f} GB ({pct:.1f}%)\n"
+        f"  Free:  {free_gb:.1f} GB"
+    )
 
 
 def _require_string(arguments: dict[str, Any], key: str) -> str:
