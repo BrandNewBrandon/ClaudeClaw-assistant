@@ -557,6 +557,41 @@ Use `assistant configure` or edit the config directly.
 
 ---
 
+## Multiple bots
+
+Each bot gets its own Telegram token and is locked to a dedicated agent. Configure them under `accounts` and `routing` in `config.json`:
+
+```json
+"accounts": {
+  "primary": {
+    "platform": "telegram",
+    "token": "<main-bot-token>",
+    "allowed_chat_ids": ["<your-chat-id>"]
+  },
+  "builder-bot": {
+    "platform": "telegram",
+    "token": "<builder-bot-token>",
+    "allowed_chat_ids": ["<your-chat-id>"]
+  }
+},
+"routing": {
+  "primary": { "default_agent": "main" },
+  "builder-bot": { "default_agent": "builder" }
+}
+```
+
+Each account gets its own polling thread when the runtime starts. The two bots share one process but have completely separate identities:
+
+- Separate Telegram username and avatar (set via @BotFather)
+- Separate `AGENT.md` personality
+- Separate conversation transcript (each bot only reads its own history)
+- Separate Claude session continuity (switching between bots never leaks context)
+- Separate memory notes under `agents/<name>/memory/`
+
+To add a second bot token: register a new bot with @BotFather, add the account block to `config.json`, create the agent with `assistant manage create-agent <name>`, and restart the runtime.
+
+---
+
 ## DM pairing
 
 By default, the bot only responds to chat IDs listed in your config.
