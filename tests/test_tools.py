@@ -32,6 +32,8 @@ def test_default_registry_lists_expected_tools() -> None:
     assert "write_file" in names
     assert "list_dir" in names
     assert "run_command" in names
+    assert "disk_usage" in names
+    assert "list_processes" in names
 
 
 def test_registry_executes_registered_tool() -> None:
