@@ -845,13 +845,14 @@ class AssistantRouter:
         _approval_store = self._approval_store
         _surface, _account_id, _chat_id = surface, account_id, chat_id
         _channel = channel
+        _agent_cfg = self._load_agent_config(active_agent)
 
         def _gated_run_command(args: dict) -> str:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
-            _agent_cfg = self._load_agent_config(active_agent)
             if any(cmd == p or cmd.startswith(p + " ") for p in _agent_cfg.safe_commands):
+                LOGGER.info("safe command bypassed approval agent=%s cmd=%r", active_agent, cmd)
                 return execute_shell_command(cmd, cwd=str(working_directory))
             message_text_out, approval_id = _approval_store.request(_surface, _account_id, _chat_id, cmd)
             # Send inline keyboard buttons if the channel supports them
@@ -996,13 +997,14 @@ class AssistantRouter:
         _surface = ""  # surface not needed for the approval gating display here
         _chat_id = chat_id
         _channel = channel
+        _agent_cfg = self._load_agent_config(active_agent)
 
         def _gated_run_command(args: dict) -> str:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
-            _agent_cfg = self._load_agent_config(active_agent)
             if any(cmd == p or cmd.startswith(p + " ") for p in _agent_cfg.safe_commands):
+                LOGGER.info("safe command bypassed approval agent=%s cmd=%r", active_agent, cmd)
                 return execute_shell_command(cmd, cwd=str(working_directory))
             message_text_out, approval_id = _approval_store.request(_surface, "", _chat_id, cmd)
             if _channel is not None:
