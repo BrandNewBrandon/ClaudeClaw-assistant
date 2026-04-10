@@ -828,12 +828,9 @@ class AssistantRouter:
                 + f"\n\n[Photo attached — saved at: {image_path} — use your file tools to read and analyze it.]"
             ).lstrip()
 
-        # Determine whether we can stream to this channel
-        can_stream = (
-            channel is not None
-            and hasattr(self._model_runner, "run_prompt_streaming")
-            and hasattr(channel, "send_and_get_message_id")
-        )
+        # Streaming is disabled — the typing indicator covers the wait and the
+        # full reply is sent in one shot, avoiding the ▌ placeholder UX.
+        can_stream = False
 
         # ── Streaming path ───────────────────────────────────────────────────────
         if can_stream:
