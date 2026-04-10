@@ -120,7 +120,7 @@ def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
 
         context = context_builder.load_agent_context(agent_name)
         relevant_memory = memory_store.find_relevant_memory(agent_name, message, semantic=semantic)
-        recent_transcript = memory_store.read_recent_transcript("mcp", chat_id)
+        recent_transcript = memory_store.read_recent_transcript("mcp", chat_id, agent_name=agent_name)
 
         prompt = context_builder.build_prompt(
             context,

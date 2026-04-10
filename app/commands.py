@@ -287,7 +287,8 @@ class CommandHandler:
             if self._memory_store is None or chat_id is None:
                 return ("Transcript unavailable.", None, False, None)
             entries = self._memory_store.read_recent_transcript(
-                surface, chat_id, limit=limit, account_id=account_id or "primary"
+                surface, chat_id, limit=limit, account_id=account_id or "primary",
+                agent_name=active_agent,
             )
             if not entries:
                 return ("No transcript entries found.", None, False, None)

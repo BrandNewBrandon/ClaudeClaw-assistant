@@ -63,7 +63,7 @@ class SessionCompactor:
         Returns True if compaction was performed.
         """
         summary, recent = self._memory.read_transcript_with_compaction(
-            surface, chat_id, account_id=account_id,
+            surface, chat_id, account_id=account_id, agent_name=agent,
         )
 
         # Estimate tokens of recent (post-compaction) entries

@@ -170,7 +170,8 @@ class TerminalChatSession:
         tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
 
         recent_transcript = self._memory.read_recent_transcript(
-            SURFACE, self._chat_id, limit=6, account_id=ACCOUNT_ID
+            SURFACE, self._chat_id, limit=6, account_id=ACCOUNT_ID,
+            agent_name=self._agent_name,
         )
         relevant_memory = self._memory.find_relevant_memory(
             self._agent_name, user_message, limit=4,

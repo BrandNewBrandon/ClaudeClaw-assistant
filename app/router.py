@@ -506,7 +506,7 @@ class AssistantRouter:
             metadata={"message_id": message.message_id},
         )
 
-        transcript_path = self._memory.transcript_path(surface, message.chat_id, account_id=account_id)
+        transcript_path = self._memory.transcript_path(surface, message.chat_id, account_id=account_id, agent_name=active_agent)
         self._runtime_state.set_transcript_path(transcript_path)
 
         # ── Approval gate: handle YES/NO for pending run_command approvals ──────
@@ -683,6 +683,7 @@ class AssistantRouter:
                 surface,
                 message.chat_id,
                 account_id=account_id,
+                agent_name=active_agent,
             )
             # Limit recent entries to prevent huge context
             if len(recent_transcript) > 20:
