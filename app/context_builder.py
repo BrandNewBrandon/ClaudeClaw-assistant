@@ -21,6 +21,7 @@ class AgentContext:
 class ContextBuilder:
     def __init__(self, agents_dir: Path) -> None:
         self._agents_dir = agents_dir
+        self._file_cache: dict[Path, tuple[float, str]] = {}
 
     def load_agent_context(self, agent_name: str) -> AgentContext:
         agent_dir = self._agents_dir / agent_name
@@ -169,6 +170,18 @@ class ContextBuilder:
         sections.append(f"=== CURRENT USER MESSAGE ===\n{user_message.strip()}")
 
         return "\n\n".join(sections) + "\n"
+
+    def _read_cached(self, path: Path) -> str:
+        if not path.exists():
+            self._file_cache.pop(path, None)
+            return ""
+        mtime = path.stat().st_mtime
+        cached = self._file_cache.get(path)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+        content = path.read_text(encoding="utf-8").strip()
+        self._file_cache[path] = (mtime, content)
+        return content
 
     def _load_recent_daily_notes(self, memory_dir: Path) -> str:
         if not memory_dir.exists():
