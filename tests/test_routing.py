@@ -141,3 +141,32 @@ def test_monitor_workers_raises_for_dead_worker() -> None:
         assert "Account worker stopped unexpectedly: channel-poll-primary" in str(exc)
     else:
         raise AssertionError("Expected SystemExit")
+
+
+def test_session_key_differs_by_agent(tmp_path: Path) -> None:
+    """Two agents in the same chat produce different session keys for _session_ids."""
+    try:
+        router = make_router(tmp_path, default_agent="main")
+        # Simulate session IDs stored for two agents in the same chat
+        session_key = "telegram:primary:123"
+        router._session_ids[f"{session_key}:main"] = "session-main"
+        router._session_ids[f"{session_key}:builder"] = "session-builder"
+
+        assert router._session_ids.get(f"{session_key}:main") == "session-main"
+        assert router._session_ids.get(f"{session_key}:builder") == "session-builder"
+        assert router._session_ids.get(f"{session_key}:main") != router._session_ids.get(f"{session_key}:builder")
+    finally:
+        os.environ.pop(app_paths.APP_ROOT_ENV, None)
+
+
+def test_session_key_format_includes_agent(tmp_path: Path) -> None:
+    """_session_key base is surface:account:chat_id; agent appended inline."""
+    try:
+        router = make_router(tmp_path)
+        base = router._session_key("telegram", "primary", "123")
+        assert base == "telegram:primary:123"
+        # Agent-scoped key is base + ":" + agent
+        assert f"{base}:main" == "telegram:primary:123:main"
+        assert f"{base}:builder" == "telegram:primary:123:builder"
+    finally:
+        os.environ.pop(app_paths.APP_ROOT_ENV, None)

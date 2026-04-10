@@ -600,7 +600,7 @@ class AssistantRouter:
                     compacted_count=0,
                 )
                 # Clear session ID so claude-code starts a new conversation
-                self._session_ids.pop(session_key, None)
+                self._session_ids.pop(f"{session_key}:{active_agent}", None)
                 active_agent = routing.default_agent
                 LOGGER.info("Reset session state for account=%s chat_id=%s", account_id, message.chat_id)
                 self._hooks.emit_async("session_reset", account_id=account_id,
@@ -696,7 +696,7 @@ class AssistantRouter:
                 semantic=self._config.semantic_search_enabled,
             )
             working_dir = self._resolve_working_directory(active_agent)
-            prior_session_id = self._session_ids.get(session_key)
+            prior_session_id = self._session_ids.get(f"{session_key}:{active_agent}")
             reply, new_session_id, already_sent = self._generate_reply_with_tools(
                 message_text=message.text,
                 active_agent=active_agent,
@@ -715,7 +715,7 @@ class AssistantRouter:
                 compaction_summary=compaction_summary,
             )
             if new_session_id:
-                self._session_ids[session_key] = new_session_id
+                self._session_ids[f"{session_key}:{active_agent}"] = new_session_id
             self._cooldown.record(message.chat_id)
             if self._config.cache_enabled:
                 self._response_cache.set(message.chat_id, active_agent, message.text, reply)
