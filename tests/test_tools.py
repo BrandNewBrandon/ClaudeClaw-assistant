@@ -74,3 +74,30 @@ def test_disk_usage_handles_missing_path() -> None:
     result = registry.execute(ToolCall(name="disk_usage", arguments={"path": "/nonexistent/path/xyz"}))
     assert result.ok is True
     assert "not found" in result.output.lower()
+
+
+def test_list_processes_returns_process_table() -> None:
+    registry = build_default_registry()
+    result = registry.execute(ToolCall(name="list_processes", arguments={}))
+    assert result.ok is True
+    # ps aux always includes at least a few lines on any Unix system
+    assert len(result.output.splitlines()) > 2
+
+
+def test_list_processes_filter_narrows_results() -> None:
+    import sys
+    registry = build_default_registry()
+    # Filter by "python" — current test process guarantees at least one match
+    result = registry.execute(ToolCall(name="list_processes", arguments={"filter": "python"}))
+    assert result.ok is True
+    assert "python" in result.output.lower()
+
+
+def test_list_processes_filter_no_match_returns_message() -> None:
+    registry = build_default_registry()
+    result = registry.execute(ToolCall(
+        name="list_processes",
+        arguments={"filter": "zzz_definitely_not_running_xyzzy"},
+    ))
+    assert result.ok is True
+    assert "no processes" in result.output.lower()

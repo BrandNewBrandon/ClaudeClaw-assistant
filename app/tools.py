@@ -165,6 +165,14 @@ def build_default_registry(working_directory: str | Path | None = None) -> ToolR
         ),
         _disk_usage,
     )
+    registry.register(
+        ToolSpec(
+            name="list_processes",
+            description="List running processes. Optional filter narrows results by name substring.",
+            arguments={"filter": "optional process name substring to filter by (e.g. 'python', 'node')"},
+        ),
+        _list_processes,
+    )
     _cwd = str(working_directory) if working_directory else None
     registry.register(
         ToolSpec(
@@ -259,6 +267,49 @@ def _disk_usage(arguments: dict[str, Any]) -> str:
         f"  Used:  {used_gb:.1f} GB ({pct:.1f}%)\n"
         f"  Free:  {free_gb:.1f} GB"
     )
+
+
+def _list_processes(arguments: dict[str, Any]) -> str:
+    name_filter = str(arguments.get("filter", "")).strip().lower()
+    try:
+        proc = subprocess.run(
+            ["ps", "aux"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return "Error: ps command timed out."
+    except FileNotFoundError:
+        return "Error: ps command not available on this system."
+
+    lines = proc.stdout.splitlines()
+    if not lines:
+        return "No process output returned."
+
+    rows = lines[1:]  # skip header
+
+    if name_filter:
+        rows = [r for r in rows if name_filter in r.lower()]
+        if not rows:
+            return f"No processes matching {name_filter!r}."
+
+    rows = rows[:50]
+    out_lines = ["  PID   %CPU   %MEM  COMMAND"]
+    for row in rows:
+        parts = row.split(None, 10)
+        if len(parts) >= 11:
+            out_lines.append(
+                f"{parts[1]:>6}  {parts[2]:>5}  {parts[3]:>5}  {parts[10][:60]}"
+            )
+        else:
+            out_lines.append(row[:80])
+
+    total = len(lines) - 1
+    result = "\n".join(out_lines)
+    if total > 50:
+        result += f"\n\n(showing 50 of {total} processes)"
+    return result
 
 
 def _require_string(arguments: dict[str, Any], key: str) -> str:
