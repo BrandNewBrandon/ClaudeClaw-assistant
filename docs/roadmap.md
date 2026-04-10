@@ -69,11 +69,14 @@ If agents are going to feel distinct, they eventually need stronger routing, beh
 
 ### Tools and skills
 - ✅ Tool loop (web_search, web_fetch, read_file, write_file, list_dir, run_command)
+- ✅ Local system tools (disk_usage, list_processes) — approval-free read-only queries
+- ✅ Dev/coding agent (builder) — safe_commands whitelist, working_dir override, execution-biased persona
 - ✅ Plugin / skill system (GitHub, Obsidian, TTS, Browser skills)
 - ✅ Slash command surface (/remind, /tasks, /quiet, /memory, /consolidate, etc.)
 - ✅ Response caching and cooldown tracking
 - ✅ SQLite-backed task scheduler with quiet hours
 - ✅ Nightly memory consolidation thread
+- ✅ Context assembly caching — mtime-based file cache in ContextBuilder eliminates redundant disk reads
 
 ### UX and polish
 - ✅ **Streaming responses** — live token-by-token editing in Telegram with tool status indicators
@@ -152,35 +155,32 @@ This is where secondary bot token support belongs.
 
 ---
 
-## Phase 3 — Tool substrate and efficiency
+## Phase 3 — Tool substrate and efficiency ✅ COMPLETE
 
 ### Goal
 Give the assistant structured action-taking abilities while improving usage efficiency.
 
-### Phase 3A — Local action tools
+### Phase 3A — Local action tools ✅
 - file reads/writes
 - shell execution
 - process control
 - safe command wrappers
 
-### Phase 3B — Web and information tools
+### Phase 3B — Web and information tools ✅
 - web fetch/search
 - page extraction
 - image support later if useful
 
-### Phase 3C — Local system tools
-- filesystem inspection
-- process introspection
-- service checks
-- local diagnostics
+### Phase 3C — Local system tools ✅
+- disk_usage — total/used/free for any filesystem path
+- list_processes — running processes with optional name filter
+- (service checks left to run_command — appropriate to gate behind approval)
 
-### Phase 3D — Caching and usage efficiency
-- context assembly caching for unchanged agent context
-- transcript-window and context-budget optimization
-- deterministic tool-result caching where results are stable
-- cautious model-output caching only where correctness risk is low
+### Phase 3D — Caching and usage efficiency ✅
+- context assembly caching — mtime-based _read_cached in ContextBuilder
+- (transcript-window optimization and model-output caching deferred)
 
-### Exit Criteria
+### Exit Criteria ✅
 - the assistant can do more than chat and reason
 - tools feel reusable and inspectable
 - repeated operations waste less usage and time
@@ -327,10 +327,9 @@ Foundation, core runtime, tools, and UX polish are all in place. The assistant i
 
 Suggested next priorities (in order):
 1. **Voice memos → Whisper transcription** — Telegram voice messages piped through a local Whisper model; highest daily visibility, zero changes to the AI layer
-2. **Dev / coding agent** — purpose-built builder agent with git tools, GitHub skill expansion, and a `/build` command surface; the feature OpenClaw cannot match
+2. **Document Q&A** — PDF attachment → text extraction → include in prompt; quick win given image handling is already wired in
 3. **Semantic memory search** — config toggle wired up, embedding infrastructure exists in `app/embeddings.py` (fastembed + numpy); remaining: wire `embedding_model` config field to the embeddings module
-4. **Document Q&A** — PDF attachment → text extraction → include in prompt; quick win given image handling is already wired in
-5. **Inline Telegram approval keyboards** — replace YES/NO text replies for `run_command` with inline buttons; final UX polish
+4. **Inline Telegram approval keyboards** — replace YES/NO text replies for `run_command` with inline buttons; final UX polish
 
 See also:
 - `docs/claudeclaw-architecture.md`

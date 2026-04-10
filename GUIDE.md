@@ -16,14 +16,15 @@ It uses Claude (Anthropic's AI) as its brain and keeps its own memory between co
 5. [Starting and stopping](#starting-and-stopping)
 6. [Terminal commands](#terminal-commands)
 7. [Chat commands](#chat-commands)
-8. [Session compaction](#session-compaction)
-9. [Session resets](#session-resets)
-10. [Agent files](#agent-files)
-11. [Web dashboard](#web-dashboard)
-12. [Multiple agents](#multiple-agents)
-13. [DM pairing](#dm-pairing)
-14. [Hooks](#hooks)
-15. [Troubleshooting](#troubleshooting)
+8. [Tools](#tools)
+9. [Session compaction](#session-compaction)
+10. [Session resets](#session-resets)
+11. [Agent files](#agent-files)
+12. [Web dashboard](#web-dashboard)
+13. [Multiple agents](#multiple-agents)
+14. [DM pairing](#dm-pairing)
+15. [Hooks](#hooks)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -385,6 +386,27 @@ If you have set the `OBSIDIAN_VAULT_PATH` environment variable, these commands w
 | Command | What it does |
 |---|---|
 | `/help` | Shows a quick reference of all available commands |
+
+---
+
+## Tools
+
+The assistant has access to the following tools. Use `/tools` in chat to list them.
+
+| Tool | What it does |
+|---|---|
+| `web_search` | Search the web (DuckDuckGo) |
+| `web_fetch` | Fetch and extract content from a URL |
+| `read_file` | Read a local file by path |
+| `write_file` | Write content to a local file |
+| `list_dir` | List the contents of a directory |
+| `disk_usage` | Show disk space (total/used/free) for a filesystem path |
+| `list_processes` | List running processes, optionally filtered by name |
+| `run_command` | Run a shell command (requires approval unless whitelisted) |
+
+`run_command` prompts for YES/NO approval before executing. You can whitelist trusted
+command prefixes per-agent in `agent.json` via the `safe_commands` field — those run
+without prompting.
 
 ---
 

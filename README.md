@@ -4,27 +4,35 @@ Standalone personal assistant runtime powered by Claude Code and designed to rec
 
 ## Current status
 
-Phase 1A through early multi-agent are in place:
-- Telegram polling and replies
-- Claude Code subprocess execution
-- agent context loading
-- transcript persistence
-- daily note persistence
-- basic commands
-- recent transcript context
-- per-chat locking
-- single-instance lock
-- Windows helper scripts
-- multi-agent-ready layout
-- second example agent (`builder`)
-- cross-platform agent management CLI
-- early `assistant` command surface
-- per-agent structured config with runtime overrides
-- `/agent info <name>`
-- Mac/Linux start/stop/status wrappers
-- project-root `assistant.ps1` and `assistant.sh` launchers
-- clone/rename/archive-restore agent lifecycle commands
-- chat-to-agent routing with pinned-chat behavior
+Phases 0–3 complete. Daily-driver ready.
+
+**Runtime:**
+- Telegram polling and replies (Discord and Slack adapters also available)
+- Claude Code subprocess execution with streaming responses
+- agent context loading, transcript persistence, daily notes
+- per-chat locking, single-instance lock
+- session continuity, memory consolidation, quiet hours
+- web dashboard (`assistant ui`), MCP server (`assistant mcp`), terminal REPL (`assistant chat`)
+
+**Agents:**
+- multi-agent routing with pinned-chat behavior
+- per-agent config (`agent.json`) — model, effort, safe commands, working directory
+- builder agent — execution-biased coding persona with command approval whitelist
+- agent lifecycle CLI (create/clone/rename/archive/restore)
+
+**Tools (available to all agents):**
+- `web_search` — DuckDuckGo search
+- `web_fetch` — fetch and extract page content
+- `read_file` — read local files
+- `write_file` — write local files
+- `list_dir` — list directory contents
+- `disk_usage` — disk space (total/used/free) for any path
+- `list_processes` — running processes with optional name filter
+- `run_command` — shell execution (gated behind approval)
+
+**Efficiency:**
+- mtime-based context assembly caching (ContextBuilder)
+- response caching and cooldown tracking
 
 ## Goals
 
@@ -197,13 +205,17 @@ Example:
   "description": "Focused implementation and project-building assistant",
   "provider": "claude-code",
   "model": "opus",
-  "effort": "high"
+  "effort": "high",
+  "working_dir": "~/Projects",
+  "safe_commands": ["git", "npm", "pytest", "cargo"]
 }
 ```
 
 Behavior:
 - `provider` falls back to global `model_provider` if omitted
 - `model` and `effort` fall back to global config if omitted
+- `working_dir` sets the shell working directory for `run_command` (tilde expanded)
+- `safe_commands` lists command prefixes that bypass the approval gate (word-boundary matched)
 - Telegram commands `/agents`, `/agent`, and `/agent info <name>` show agent metadata
 - switching agents changes the effective provider/model/effort used by the runtime
 
