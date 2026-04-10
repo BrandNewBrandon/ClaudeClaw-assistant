@@ -57,7 +57,7 @@ def test_maybe_compact_returns_false_when_under_threshold(tmp_path: Path) -> Non
     runner = _FakeRunner()
 
     # Write a small transcript that won't exceed threshold
-    tpath = memory.transcript_path("telegram", "123", account_id="primary")
+    tpath = memory.transcript_path("telegram", "123", account_id="primary", agent_name="main")
     tpath.parent.mkdir(parents=True, exist_ok=True)
     tpath.write_text("", encoding="utf-8")
 
@@ -79,7 +79,7 @@ def test_maybe_compact_performs_compaction_when_over_threshold(tmp_path: Path, m
 
     monkeypatch.setattr(
         memory, "read_transcript_with_compaction",
-        lambda surface, chat_id, account_id="primary": (None, entries),
+        lambda surface, chat_id, account_id="primary", agent_name="main": (None, entries),
     )
 
     appended: list[dict[str, Any]] = []
@@ -109,7 +109,7 @@ def test_maybe_compact_returns_false_on_model_exception(tmp_path: Path, monkeypa
     entries = _make_entries(10, chars_each=100)
     monkeypatch.setattr(
         memory, "read_transcript_with_compaction",
-        lambda surface, chat_id, account_id="primary": (None, entries),
+        lambda surface, chat_id, account_id="primary", agent_name="main": (None, entries),
     )
 
     compactor = SessionCompactor(memory, runner, token_budget=100, trigger_ratio=0.8)
@@ -126,7 +126,7 @@ def test_maybe_compact_returns_false_on_empty_summary(tmp_path: Path, monkeypatc
     entries = _make_entries(10, chars_each=100)
     monkeypatch.setattr(
         memory, "read_transcript_with_compaction",
-        lambda surface, chat_id, account_id="primary": (None, entries),
+        lambda surface, chat_id, account_id="primary", agent_name="main": (None, entries),
     )
 
     compactor = SessionCompactor(memory, runner, token_budget=100, trigger_ratio=0.8)
@@ -143,7 +143,7 @@ def test_maybe_compact_includes_previous_summary_in_prompt(tmp_path: Path, monke
     entries = _make_entries(10, chars_each=100)
     monkeypatch.setattr(
         memory, "read_transcript_with_compaction",
-        lambda surface, chat_id, account_id="primary": ("Previous summary here.", entries),
+        lambda surface, chat_id, account_id="primary", agent_name="main": ("Previous summary here.", entries),
     )
     monkeypatch.setattr(memory, "append_compaction_summary", lambda **kw: None)
 
