@@ -701,16 +701,23 @@ class AssistantRouter:
             working_dir = self._resolve_working_directory(active_agent)
             prior_session_id = self._session_ids.get(f"{session_key}:{active_agent}")
 
-            # Start typing indicator loop if the channel supports it (e.g. Telegram).
-            # Send once synchronously first so the indicator appears before any
-            # streaming placeholder is sent (the background thread may lose the race).
-            if hasattr(channel, "start_typing_loop"):
+            # Start typing indicator if the channel supports it (e.g. Telegram).
+            # For streaming channels a single send_typing is enough — the first
+            # chunk message clears it naturally and we don't want the loop to
+            # re-show "typing" after the reply has already started appearing.
+            # The background loop is only used on the blocking (non-streaming) path
+            # where replies can take a long time with no visible progress.
+            if hasattr(channel, "send_typing"):
+                try:
+                    channel.send_typing(message.chat_id)
+                except Exception:
+                    pass
+            can_stream_here = (
+                hasattr(self._model_runner, "run_prompt_streaming")
+                and hasattr(channel, "send_and_get_message_id")
+            )
+            if not can_stream_here and hasattr(channel, "start_typing_loop"):
                 interval = getattr(channel, "_typing_interval", 4)
-                if hasattr(channel, "send_typing"):
-                    try:
-                        channel.send_typing(message.chat_id)
-                    except Exception:
-                        pass
                 typing_stop, typing_thread = channel.start_typing_loop(
                     message.chat_id, interval
                 )
