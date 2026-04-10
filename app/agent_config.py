@@ -41,7 +41,9 @@ def _optional_string_list(data: dict[str, Any], key: str) -> list[str]:
     for item in value:
         if not isinstance(item, str):
             raise AgentConfigError(f"Invalid agent config field: {key} items must be strings")
-        result.append(item)
+        stripped = item.strip()
+        if stripped:
+            result.append(stripped)
     return result
 
 

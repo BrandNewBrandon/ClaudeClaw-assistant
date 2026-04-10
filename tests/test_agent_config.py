@@ -84,7 +84,8 @@ def test_safe_command_prefix_matches(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     config = load_agent_config(tmp_path)
-    assert any("git status --short".startswith(p) for p in config.safe_commands)
+    cmd = "git status --short"
+    assert any(cmd == p or cmd.startswith(p + " ") for p in config.safe_commands)
 
 
 def test_safe_command_prefix_does_not_match_different_subcommand(tmp_path: Path) -> None:
@@ -94,4 +95,16 @@ def test_safe_command_prefix_does_not_match_different_subcommand(tmp_path: Path)
         encoding="utf-8",
     )
     config = load_agent_config(tmp_path)
-    assert not any("git push".startswith(p) for p in config.safe_commands)
+    cmd = "git push"
+    assert not any(cmd == p or cmd.startswith(p + " ") for p in config.safe_commands)
+
+
+def test_safe_command_prefix_does_not_match_longer_command_name(tmp_path: Path) -> None:
+    """'lsblk' must NOT be whitelisted when only 'ls' is in safe_commands."""
+    (tmp_path / "agent.json").write_text(
+        '{"safe_commands": ["ls"]}',
+        encoding="utf-8",
+    )
+    config = load_agent_config(tmp_path)
+    cmd = "lsblk"
+    assert not any(cmd == p or cmd.startswith(p + " ") for p in config.safe_commands)
