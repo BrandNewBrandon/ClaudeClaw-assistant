@@ -49,3 +49,22 @@ def test_memory_store_returns_empty_when_no_relevant_snippets(tmp_path: Path) ->
     store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
 
     assert store.find_relevant_memory("main", "browser automation", limit=3) == []
+
+
+def test_find_relevant_memory_keyword_fallback_when_semantic_disabled(tmp_path: Path) -> None:
+    """When semantic=False, keyword search is used even if fastembed is installed."""
+    agents_dir = tmp_path / "agents"
+    agent_dir = agents_dir / "main"
+    memory_dir = agent_dir / "memory"
+    memory_dir.mkdir(parents=True)
+    (agent_dir / "MEMORY.md").write_text(
+        "Set up multi-account routing for Telegram bots.",
+        encoding="utf-8",
+    )
+
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=agents_dir)
+
+    snippets = store.find_relevant_memory("main", "routing", limit=3, semantic=False)
+
+    assert snippets
+    assert "routing" in "\n".join(snippets).lower()

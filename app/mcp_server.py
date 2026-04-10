@@ -106,6 +106,7 @@ def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
         cfg = load_raw_config(get_config_file())
         project_root = Path(cfg.get("project_root", ".")).expanduser()
         shared_dir = Path(cfg.get("shared_dir", str(project_root / "shared"))).expanduser()
+        semantic = cfg.get("semantic_search_enabled", True)
 
         runner = ClaudeCodeRunner(
             timeout_seconds=int(cfg.get("claude_timeout_seconds", 120)),
@@ -118,7 +119,7 @@ def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
         tool_loop = ToolLoop(tool_registry)
 
         context = context_builder.load_agent_context(agent_name)
-        relevant_memory = memory_store.find_relevant_memory(agent_name, message)
+        relevant_memory = memory_store.find_relevant_memory(agent_name, message, semantic=semantic)
         recent_transcript = memory_store.read_recent_transcript("mcp", chat_id)
 
         prompt = context_builder.build_prompt(
@@ -157,8 +158,12 @@ def _tool_search_memory(agents_dir: Path, shared_dir: Path, args: dict[str, Any]
 
     try:
         from .memory import MemoryStore
+        from .app_paths import get_config_file
+        from .config_manager import load_raw_config
+        cfg = load_raw_config(get_config_file())
+        semantic = cfg.get("semantic_search_enabled", True)
         store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
-        snippets = store.find_relevant_memory(agent_name, query, limit=8)
+        snippets = store.find_relevant_memory(agent_name, query, limit=8, semantic=semantic)
         if not snippets:
             return f"No relevant memory found for query: {query}"
         return "\n\n".join(f"- {s}" for s in snippets)

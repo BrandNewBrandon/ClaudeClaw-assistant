@@ -568,6 +568,7 @@ class AssistantRouter:
                 active_agent,
                 message.text,
                 limit=4,
+                semantic=self._config.semantic_search_enabled,
             )
             reply, switch_agent_to, reset_chat, remember_text = self._commands.handle(
                 message.text,
@@ -691,6 +692,7 @@ class AssistantRouter:
                 active_agent,
                 message.text,
                 limit=4,
+                semantic=self._config.semantic_search_enabled,
             )
             working_dir = self._resolve_working_directory(active_agent)
             prior_session_id = self._session_ids.get(session_key)

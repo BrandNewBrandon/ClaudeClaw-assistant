@@ -173,7 +173,8 @@ class TerminalChatSession:
             SURFACE, self._chat_id, limit=6, account_id=ACCOUNT_ID
         )
         relevant_memory = self._memory.find_relevant_memory(
-            self._agent_name, user_message, limit=4
+            self._agent_name, user_message, limit=4,
+            semantic=self._app_config.semantic_search_enabled,
         )
         agent_context = self._context_builder.load_agent_context(self._agent_name)
         prior_session_id = self._session_ids.get(self._chat_id)
@@ -292,7 +293,8 @@ class TerminalChatSession:
                     agent_config = None
 
                 memory_preview = self._memory.find_relevant_memory(
-                    self._agent_name, user_input, limit=4
+                    self._agent_name, user_input, limit=4,
+                    semantic=self._app_config.semantic_search_enabled,
                 )
                 reply, switch_to, reset_chat, remember_text = self._commands.handle(
                     user_input,
