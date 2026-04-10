@@ -116,8 +116,8 @@ class MemoryStore:
         self._embedding_indices[agent] = index
         return index
 
-    def transcript_path(self, surface: str, chat_id: str, *, account_id: str = "primary") -> Path:
-        return self._shared_dir / "transcripts" / f"{surface}-{account_id}-{chat_id}.jsonl"
+    def transcript_path(self, surface: str, chat_id: str, *, account_id: str = "primary", agent_name: str = "main") -> Path:
+        return self._shared_dir / "transcripts" / f"{surface}-{account_id}-{chat_id}-{agent_name}.jsonl"
 
     def append_transcript(
         self,
@@ -132,7 +132,7 @@ class MemoryStore:
     ) -> None:
         transcript_dir = self._shared_dir / "transcripts"
         transcript_dir.mkdir(parents=True, exist_ok=True)
-        path = self.transcript_path(surface, chat_id, account_id=account_id)
+        path = self.transcript_path(surface, chat_id, account_id=account_id, agent_name=agent)
 
         entry = TranscriptEntry(
             timestamp=self._now_iso(),
@@ -180,13 +180,14 @@ class MemoryStore:
         chat_id: str,
         *,
         account_id: str = "primary",
+        agent_name: str = "main",
     ) -> tuple[str | None, list[TranscriptEntry]]:
         """Read transcript respecting compaction markers.
 
         Returns ``(compaction_summary_or_None, recent_entries_after_last_compaction)``.
         If no compaction marker exists, returns ``(None, all_entries)``.
         """
-        path = self.transcript_path(surface, chat_id, account_id=account_id)
+        path = self.transcript_path(surface, chat_id, account_id=account_id, agent_name=agent_name)
         if not path.exists():
             return None, []
 
@@ -221,8 +222,8 @@ class MemoryStore:
         recent = all_entries[last_compaction_idx + 1:]
         return summary, recent
 
-    def read_recent_transcript(self, surface: str, chat_id: str, limit: int = 6, *, account_id: str = "primary") -> list[TranscriptEntry]:
-        path = self.transcript_path(surface, chat_id, account_id=account_id)
+    def read_recent_transcript(self, surface: str, chat_id: str, limit: int = 6, *, account_id: str = "primary", agent_name: str = "main") -> list[TranscriptEntry]:
+        path = self.transcript_path(surface, chat_id, account_id=account_id, agent_name=agent_name)
         if not path.exists():
             return []
 

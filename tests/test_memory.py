@@ -68,3 +68,63 @@ def test_find_relevant_memory_keyword_fallback_when_semantic_disabled(tmp_path: 
 
     assert snippets
     assert "routing" in "\n".join(snippets).lower()
+
+
+def test_transcript_path_includes_agent_name(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    path = store.transcript_path("telegram", "123", account_id="primary", agent_name="main")
+    assert path.name == "telegram-primary-123-main.jsonl"
+
+
+def test_append_transcript_scopes_by_agent(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    store.append_transcript(
+        surface="telegram", account_id="primary", chat_id="123",
+        direction="in", agent="main", message_text="Hello from main",
+    )
+    store.append_transcript(
+        surface="telegram", account_id="primary", chat_id="123",
+        direction="in", agent="builder", message_text="Hello from builder",
+    )
+    main_path = store.transcript_path("telegram", "123", account_id="primary", agent_name="main")
+    builder_path = store.transcript_path("telegram", "123", account_id="primary", agent_name="builder")
+    assert main_path != builder_path
+    assert main_path.exists()
+    assert builder_path.exists()
+    assert "Hello from main" in main_path.read_text(encoding="utf-8")
+    assert "Hello from builder" not in main_path.read_text(encoding="utf-8")
+
+
+def test_read_recent_transcript_scoped_by_agent(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    store.append_transcript(
+        surface="telegram", account_id="primary", chat_id="123",
+        direction="in", agent="main", message_text="main message",
+    )
+    store.append_transcript(
+        surface="telegram", account_id="primary", chat_id="123",
+        direction="in", agent="builder", message_text="builder message",
+    )
+    main_entries = store.read_recent_transcript(
+        "telegram", "123", account_id="primary", agent_name="main"
+    )
+    builder_entries = store.read_recent_transcript(
+        "telegram", "123", account_id="primary", agent_name="builder"
+    )
+    assert any("main message" in e.message_text for e in main_entries)
+    assert not any("builder message" in e.message_text for e in main_entries)
+    assert any("builder message" in e.message_text for e in builder_entries)
+    assert not any("main message" in e.message_text for e in builder_entries)
+
+
+def test_read_transcript_with_compaction_scoped_by_agent(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    store.append_transcript(
+        surface="telegram", account_id="primary", chat_id="123",
+        direction="in", agent="main", message_text="only main sees this",
+    )
+    summary, entries = store.read_transcript_with_compaction(
+        "telegram", "123", account_id="primary", agent_name="builder"
+    )
+    assert summary is None
+    assert entries == []
