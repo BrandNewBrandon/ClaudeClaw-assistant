@@ -34,6 +34,27 @@ def make_router(tmp_path: Path, *, default_agent: str = "main", chat_agent_map: 
     return router
 
 
+def make_router_with_agents(tmp_path: Path, *, mode: str = "project_root") -> AssistantRouter:
+    """Router stub with agents_dir and claude_working_directory_mode set."""
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    os.environ[app_paths.APP_ROOT_ENV] = str(tmp_path / "app-root")
+    router = AssistantRouter()
+    router._config = type(
+        "ConfigStub",
+        (),
+        {
+            "default_agent": "main",
+            "chat_agent_map": {},
+            "routing": {},
+            "agents_dir": agents_dir,
+            "claude_working_directory_mode": mode,
+            "project_root": tmp_path / "project",
+        },
+    )()
+    return router
+
+
 def test_routing_prefers_config_pinned_agent(tmp_path: Path) -> None:
     try:
         router = make_router(tmp_path, default_agent="main", chat_agent_map={"123": "builder"})
@@ -168,5 +189,39 @@ def test_session_key_format_includes_agent(tmp_path: Path) -> None:
         # Agent-scoped key is base + ":" + agent
         assert f"{base}:main" == "telegram:primary:123:main"
         assert f"{base}:builder" == "telegram:primary:123:builder"
+    finally:
+        os.environ.pop(app_paths.APP_ROOT_ENV, None)
+
+
+def test_resolve_working_directory_uses_agent_config_working_dir(tmp_path: Path) -> None:
+    """_resolve_working_directory returns the path from agent.json when working_dir is set."""
+    try:
+        router = make_router_with_agents(tmp_path)
+        agent_dir = router._config.agents_dir / "builder"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent.json").write_text(
+            f'{{"working_dir": "{tmp_path}/my-projects"}}',
+            encoding="utf-8",
+        )
+
+        result = router._resolve_working_directory("builder")
+
+        assert result == tmp_path / "my-projects"
+        assert result.exists()
+    finally:
+        os.environ.pop(app_paths.APP_ROOT_ENV, None)
+
+
+def test_resolve_working_directory_falls_through_without_working_dir(tmp_path: Path) -> None:
+    """_resolve_working_directory uses existing mode logic when working_dir is absent."""
+    try:
+        router = make_router_with_agents(tmp_path, mode="agent_dir")
+        agent_dir = router._config.agents_dir / "main"
+        agent_dir.mkdir(parents=True)
+        # No agent.json — working_dir defaults to None
+
+        result = router._resolve_working_directory("main")
+
+        assert result == router._config.agents_dir / "main"
     finally:
         os.environ.pop(app_paths.APP_ROOT_ENV, None)

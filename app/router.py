@@ -1243,6 +1243,12 @@ class AssistantRouter:
 
     def _resolve_working_directory(self, agent_name: str) -> Path:
         assert self._config is not None
+        agent_config = self._load_agent_config(agent_name)
+        if agent_config.working_dir:
+            path = Path(agent_config.working_dir).expanduser()
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+
         if self._config.claude_working_directory_mode == "agent_dir":
             path = self._config.agents_dir / agent_name
         else:
