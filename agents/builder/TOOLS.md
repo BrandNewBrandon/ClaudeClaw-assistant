@@ -21,6 +21,8 @@ tail              wc                echo
 
 Prefix-matched: `git status --short` is safe; `git stash drop` is not.
 
+Note: `npx` is prefix-matched, so **any** `npx` invocation runs without approval — including `npx rimraf` or arbitrary packages. Treat `npx` commands the same way you treat local scripts: only run them if you'd be comfortable running them without being asked.
+
 ### Destructive commands (always ask first)
 
 These always trigger an approval prompt:
