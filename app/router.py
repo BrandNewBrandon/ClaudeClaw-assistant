@@ -828,9 +828,12 @@ class AssistantRouter:
                 + f"\n\n[Photo attached — saved at: {image_path} — use your file tools to read and analyze it.]"
             ).lstrip()
 
-        # Streaming is disabled — the typing indicator covers the wait and the
-        # full reply is sent in one shot, avoiding the ▌ placeholder UX.
-        can_stream = False
+        # Determine whether we can stream to this channel
+        can_stream = (
+            channel is not None
+            and hasattr(self._model_runner, "run_prompt_streaming")
+            and hasattr(channel, "send_and_get_message_id")
+        )
 
         # ── Streaming path ───────────────────────────────────────────────────────
         if can_stream:
@@ -1048,14 +1051,22 @@ class AssistantRouter:
         skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         require_tool = is_obvious_web_request(message_text)
 
-        # Send the initial ▌ placeholder and capture its message_id
-        try:
-            message_id = channel.send_and_get_message_id(chat_id, "▌")
-        except Exception as exc:
-            LOGGER.warning("Streaming: failed to send placeholder message: %s", exc)
-            return None  # fall back to blocking
-        if message_id is None:
-            return None  # channel doesn't support editing
+        # message_id is set lazily on the first real chunk of text so no
+        # placeholder message is sent before Claude has anything to say.
+        message_id_box: list[int | None] = [None]
+
+        def _update_message(text: str) -> None:
+            """Send the first content or edit the existing message in place."""
+            if message_id_box[0] is None:
+                try:
+                    message_id_box[0] = channel.send_and_get_message_id(chat_id, text)
+                except Exception:
+                    pass
+            else:
+                try:
+                    channel.edit_message(chat_id, message_id_box[0], text)
+                except Exception:
+                    pass
 
         last_session_id: str | None = None
         tool_results: list[str] = []
@@ -1093,7 +1104,7 @@ class AssistantRouter:
             is_tool_response = [False]
 
             def _on_chunk(chunk: str, _buf: list = buf, _let: list = last_edit_time,
-                          _itr: list = is_tool_response, _mid: int = message_id) -> None:
+                          _itr: list = is_tool_response) -> None:
                 _buf.append(chunk)
                 accumulated = "".join(_buf)
                 # Never show raw TOOL JSON — suppress streaming if tool call detected
@@ -1101,14 +1112,11 @@ class AssistantRouter:
                     _itr[0] = True
                 if _itr[0]:
                     return
-                # Throttle Telegram edits to max 1 per 300 ms
+                # Throttle edits to max 1 per 300 ms; first chunk always sends immediately
                 now = time.monotonic()
-                if now - _let[0] >= 0.3:
-                    try:
-                        channel.edit_message(chat_id, _mid, accumulated + " ▌")
-                        _let[0] = now
-                    except Exception:
-                        pass  # never abort streaming due to a Telegram error
+                if message_id_box[0] is None or now - _let[0] >= 0.3:
+                    _update_message(accumulated)
+                    _let[0] = now
 
             self._runtime_state.mark_model_started()
             model_t0 = time.monotonic()
@@ -1124,10 +1132,7 @@ class AssistantRouter:
             except Exception as exc:
                 self._runtime_state.mark_error(str(exc))
                 LOGGER.exception("Streaming model call failed agent=%s iteration=%s", active_agent, iteration)
-                try:
-                    channel.edit_message(chat_id, message_id, f"Error: {exc}")
-                except Exception:
-                    pass
+                _update_message(f"Error: {exc}")
                 return f"Runtime error: {exc}", last_session_id
             finally:
                 self._runtime_state.mark_model_finished()
@@ -1143,10 +1148,7 @@ class AssistantRouter:
 
             if not last_output:
                 err_msg = f"Claude returned no text. stderr:\n{result.stderr.strip()}" if result.stderr.strip() else "(no response)"
-                try:
-                    channel.edit_message(chat_id, message_id, err_msg)
-                except Exception:
-                    pass
+                _update_message(err_msg)
                 return err_msg, last_session_id
 
             # Check for tool call
@@ -1154,21 +1156,14 @@ class AssistantRouter:
                 tool_call = tool_loop.parse_tool_call(last_output)
             except ToolError as exc:
                 err_msg = f"Tool protocol error: {exc}"
-                try:
-                    channel.edit_message(chat_id, message_id, err_msg)
-                except Exception:
-                    pass
+                _update_message(err_msg)
                 return err_msg, last_session_id
 
             if tool_call is None:
                 # Web-search heuristic fallback
                 if require_tool and not tool_results:
                     LOGGER.info("Streaming: forcing web_search fallback iteration=%s", iteration)
-                    status = _TOOL_STATUS.get("web_search", _TOOL_STATUS_DEFAULT)
-                    try:
-                        channel.edit_message(chat_id, message_id, status)
-                    except Exception:
-                        pass
+                    _update_message(_TOOL_STATUS.get("web_search", _TOOL_STATUS_DEFAULT))
                     fallback_result = tool_loop.execute(self._infer_web_tool_call(message_text))
                     tool_results.append(tool_loop.format_tool_result(fallback_result))
                     # Reset buf for next iteration
@@ -1177,27 +1172,15 @@ class AssistantRouter:
                     continue
                 # Final answer — do a clean last edit (no cursor)
                 if last_output.strip() == "__SILENT__":
-                    # Agent chose to suppress — delete the placeholder
-                    try:
-                        channel.edit_message(chat_id, message_id, "(done)")
-                    except Exception:
-                        pass
                     LOGGER.info("Streaming: silent reply suppressed agent=%s", active_agent)
                 else:
-                    try:
-                        channel.edit_message(chat_id, message_id, last_output)
-                    except Exception:
-                        pass
+                    _update_message(last_output)
                     LOGGER.info("Streaming: final reply agent=%s iteration=%s", active_agent, iteration)
                 return last_output, last_session_id
 
             # Tool call: show friendly status, execute, continue loop
             tool_name = tool_call.name
-            status = _TOOL_STATUS.get(tool_name, _TOOL_STATUS_DEFAULT)
-            try:
-                channel.edit_message(chat_id, message_id, status)
-            except Exception:
-                pass
+            _update_message(_TOOL_STATUS.get(tool_name, _TOOL_STATUS_DEFAULT))
 
             tool_result = tool_loop.execute(tool_call)
             tool_results.append(tool_loop.format_tool_result(tool_result))
@@ -1209,10 +1192,7 @@ class AssistantRouter:
 
         # Max iterations reached
         final = last_output or "(No final response after tool loop.)"
-        try:
-            channel.edit_message(chat_id, message_id, final)
-        except Exception:
-            pass
+        _update_message(final)
         return final, last_session_id
 
     def _infer_web_tool_call(self, message_text: str) -> ToolCall:
