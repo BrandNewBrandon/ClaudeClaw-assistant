@@ -56,7 +56,7 @@ class TerminalChatSession:
         config_path: Path | None = None,
     ) -> None:
         self._chat_id = chat_id
-        self._session_ids: dict[str, str] = {}  # chat_id -> last claude session_id
+        self._session_ids: dict[str, str] = {}  # "{chat_id}:{agent_name}" -> last claude session_id
 
         # ── Load config ───────────────────────────────────────────────────────
         from .app_paths import get_config_file
