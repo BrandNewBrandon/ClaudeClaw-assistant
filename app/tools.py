@@ -283,6 +283,9 @@ def _list_processes(arguments: dict[str, Any]) -> str:
     except FileNotFoundError:
         return "Error: ps command not available on this system."
 
+    if proc.returncode != 0:
+        return f"Error: ps exited with code {proc.returncode}."
+
     lines = proc.stdout.splitlines()
     if not lines:
         return "No process output returned."
@@ -294,6 +297,7 @@ def _list_processes(arguments: dict[str, Any]) -> str:
         if not rows:
             return f"No processes matching {name_filter!r}."
 
+    total_matching = len(rows)
     rows = rows[:50]
     out_lines = ["  PID   %CPU   %MEM  COMMAND"]
     for row in rows:
@@ -305,10 +309,9 @@ def _list_processes(arguments: dict[str, Any]) -> str:
         else:
             out_lines.append(row[:80])
 
-    total = len(lines) - 1
     result = "\n".join(out_lines)
-    if total > 50:
-        result += f"\n\n(showing 50 of {total} processes)"
+    if total_matching > 50:
+        result += f"\n\n(showing 50 of {total_matching} processes)"
     return result
 
 

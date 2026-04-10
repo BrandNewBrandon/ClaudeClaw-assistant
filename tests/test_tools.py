@@ -85,7 +85,6 @@ def test_list_processes_returns_process_table() -> None:
 
 
 def test_list_processes_filter_narrows_results() -> None:
-    import sys
     registry = build_default_registry()
     # Filter by "python" — current test process guarantees at least one match
     result = registry.execute(ToolCall(name="list_processes", arguments={"filter": "python"}))
