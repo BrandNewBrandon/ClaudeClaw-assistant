@@ -86,7 +86,7 @@ class AssistantRouter:
         self._scheduler: Scheduler | None = None
         self._consolidation_thread: ConsolidationThread | None = None
         self._briefing_thread: BriefingThread | None = None
-        self._session_ids: dict[str, str] = {}  # session_key -> last claude session_id
+        self._session_ids: dict[str, str] = {}  # "surface:account:chat_id:agent" -> last claude session_id
         self._plugin_registry: PluginRegistry | None = None
         self._approval_store = ApprovalStore()
         self._response_cache = ResponseCache()  # reconfigured after config load
