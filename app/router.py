@@ -280,6 +280,7 @@ class AssistantRouter:
                 idle_minutes=self._config.session_idle_reset_minutes,
                 last_activity=self._last_activity,
                 active_agents=self._active_agents,
+                session_ids=self._session_ids,
             )
 
         # Hooks

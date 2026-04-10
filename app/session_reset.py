@@ -34,6 +34,7 @@ class SessionResetThread:
         idle_minutes: int | None = None,
         last_activity: dict[str, float],
         active_agents: dict[str, str],
+        session_ids: dict[str, str] | None = None,
     ) -> None:
         self._memory = memory_store
         self._sessions = sessions
@@ -41,6 +42,7 @@ class SessionResetThread:
         self._idle_minutes = idle_minutes
         self._last_activity = last_activity      # shared ref from router
         self._active_agents = active_agents      # session_key -> agent name
+        self._session_ids = session_ids          # shared ref from router: "{session_key}:{agent}" -> claude session id
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_daily_date: str | None = None  # "YYYY-MM-DD"
@@ -105,6 +107,8 @@ class SessionResetThread:
                     summary_text="[Session automatically reset — new day.]",
                     compacted_count=0,
                 )
+                if self._session_ids is not None:
+                    self._session_ids.pop(f"{session_key}:{agent}", None)
                 LOGGER.info("Daily reset: session_key=%s agent=%s", session_key, agent)
             except Exception:
                 LOGGER.exception("Daily reset failed for session_key=%s", session_key)
@@ -138,8 +142,10 @@ class SessionResetThread:
                     summary_text="[Session automatically reset after idle timeout.]",
                     compacted_count=0,
                 )
-                # Remove from activity tracking so we don't reset again
+                # Remove from activity and session tracking so we don't reset again
                 self._last_activity.pop(session_key, None)
+                if self._session_ids is not None:
+                    self._session_ids.pop(f"{session_key}:{agent}", None)
                 LOGGER.info(
                     "Idle reset: session_key=%s agent=%s (idle %d min)",
                     session_key, agent, self._idle_minutes,
