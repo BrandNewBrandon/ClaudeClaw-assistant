@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from app.context_builder import AgentContext, ContextBuilder
@@ -67,7 +68,6 @@ def test_read_cached_cache_hit_skips_disk_read(tmp_path: Path) -> None:
     # Overwrite content on disk but preserve mtime so cache thinks nothing changed
     mtime = p.stat().st_mtime
     p.write_text("changed", encoding="utf-8")
-    import os
     os.utime(p, (mtime, mtime))  # restore original mtime
 
     result = builder._read_cached(p)
