@@ -661,6 +661,8 @@ class AssistantRouter:
 
         image_path = message.image_path
         already_sent = False
+        typing_stop: threading.Event | None = None
+        typing_thread: threading.Thread | None = None
 
         # Track activity for idle reset / compaction
         self._last_activity[session_key] = time.monotonic()
@@ -698,6 +700,14 @@ class AssistantRouter:
             )
             working_dir = self._resolve_working_directory(active_agent)
             prior_session_id = self._session_ids.get(f"{session_key}:{active_agent}")
+
+            # Start typing indicator loop if the channel supports it (e.g. Telegram)
+            if hasattr(channel, "start_typing_loop"):
+                interval = getattr(channel, "_typing_interval", 4)
+                typing_stop, typing_thread = channel.start_typing_loop(
+                    message.chat_id, interval
+                )
+
             reply, new_session_id, already_sent = self._generate_reply_with_tools(
                 message_text=message.text,
                 active_agent=active_agent,
@@ -728,6 +738,11 @@ class AssistantRouter:
             self._hooks.emit_async("error", account_id=account_id, chat_id=message.chat_id,
                                    agent=active_agent, error=str(exc))
         finally:
+            # Stop typing indicator if it was started
+            if typing_stop is not None:
+                typing_stop.set()
+            if typing_thread is not None:
+                typing_thread.join(timeout=2)
             # Clean up the temp image file regardless of success or failure
             if image_path:
                 try:
