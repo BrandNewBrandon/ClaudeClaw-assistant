@@ -850,6 +850,9 @@ class AssistantRouter:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
+            _agent_cfg = self._load_agent_config(active_agent)
+            if any(cmd == p or cmd.startswith(p + " ") for p in _agent_cfg.safe_commands):
+                return execute_shell_command(cmd, cwd=str(working_directory))
             message_text_out, approval_id = _approval_store.request(_surface, _account_id, _chat_id, cmd)
             # Send inline keyboard buttons if the channel supports them
             if _channel is not None:
@@ -998,6 +1001,9 @@ class AssistantRouter:
             cmd = str(args.get("command", "")).strip()
             if not cmd:
                 return "command is required."
+            _agent_cfg = self._load_agent_config(active_agent)
+            if any(cmd == p or cmd.startswith(p + " ") for p in _agent_cfg.safe_commands):
+                return execute_shell_command(cmd, cwd=str(working_directory))
             message_text_out, approval_id = _approval_store.request(_surface, "", _chat_id, cmd)
             if _channel is not None:
                 try:
