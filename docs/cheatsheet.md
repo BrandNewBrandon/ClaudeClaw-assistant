@@ -191,7 +191,7 @@ agents/<name>/
 | `pairing_enabled` | `true` | DM pairing system |
 | `consolidation_enabled` | `true` | Daily note consolidation |
 | `consolidation_keep_days` | `3` | Days before consolidation |
-| `semantic_search_enabled` | `true` | Semantic memory search |
+| `semantic_search_enabled` | `true` | Semantic memory search (requires fastembed) |
 | `briefing_enabled` | `false` | Scheduled briefings |
 | `briefing_times` | `[9]` | Briefing hours (24h) |
 | `quiet_hours_start` | — | Quiet start (HH:MM) |

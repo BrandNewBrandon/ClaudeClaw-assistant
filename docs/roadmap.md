@@ -328,7 +328,7 @@ Foundation, core runtime, tools, and UX polish are all in place. The assistant i
 Suggested next priorities (in order):
 1. **Voice memos → Whisper transcription** — Telegram voice messages piped through a local Whisper model; highest daily visibility, zero changes to the AI layer
 2. **Dev / coding agent** — purpose-built builder agent with git tools, GitHub skill expansion, and a `/build` command surface; the feature OpenClaw cannot match
-3. **Semantic memory search** — replace keyword matching in `find_relevant_memory()` with local embeddings (`sentence-transformers` + `sqlite-vec`); raises the floor on every interaction
+3. **Semantic memory search** — config toggle wired up, embedding infrastructure exists in `app/embeddings.py` (fastembed + numpy); remaining: wire `embedding_model` config field to the embeddings module
 4. **Document Q&A** — PDF attachment → text extraction → include in prompt; quick win given image handling is already wired in
 5. **Inline Telegram approval keyboards** — replace YES/NO text replies for `run_command` with inline buttons; final UX polish
 
