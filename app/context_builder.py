@@ -31,12 +31,12 @@ class ContextBuilder:
         return AgentContext(
             agent_name=agent_name,
             agent_dir=agent_dir,
-            agent_md=self._read_optional(agent_dir / "AGENT.md"),
-            user_md=self._read_optional(agent_dir / "USER.md"),
-            memory_md=self._read_optional(agent_dir / "MEMORY.md"),
-            tools_md=self._read_optional(agent_dir / "TOOLS.md"),
+            agent_md=self._read_cached(agent_dir / "AGENT.md"),
+            user_md=self._read_cached(agent_dir / "USER.md"),
+            memory_md=self._read_cached(agent_dir / "MEMORY.md"),
+            tools_md=self._read_cached(agent_dir / "TOOLS.md"),
             recent_daily_notes=self._load_recent_daily_notes(agent_dir / "memory"),
-            bootstrap_md=self._read_optional(agent_dir / "BOOTSTRAP.md"),
+            bootstrap_md=self._read_cached(agent_dir / "BOOTSTRAP.md"),
         )
 
     def build_prompt(
@@ -192,7 +192,7 @@ class ContextBuilder:
         for path in files:
             if path.name.upper() == "README.MD":
                 continue
-            recent.append(f"# {path.name}\n{self._read_optional(path)}")
+            recent.append(f"# {path.name}\n{self._read_cached(path)}")
             if len(recent) >= 2:
                 break
         return "\n\n".join(recent)
@@ -213,8 +213,3 @@ class ContextBuilder:
             return ""
         return "\n\n".join(f"- {snippet}" for snippet in snippets)
 
-    @staticmethod
-    def _read_optional(path: Path) -> str:
-        if not path.exists():
-            return ""
-        return path.read_text(encoding="utf-8").strip()

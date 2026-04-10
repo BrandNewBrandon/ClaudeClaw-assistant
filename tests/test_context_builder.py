@@ -108,3 +108,24 @@ def test_read_cached_evicts_entry_when_file_deleted(tmp_path: Path) -> None:
     result = builder._read_cached(p)
     assert result == ""
     assert p not in builder._file_cache
+
+
+def test_load_agent_context_uses_cache_on_second_call(tmp_path: Path) -> None:
+    """Second load_agent_context call for same agent reuses cached file content."""
+    agent_dir = tmp_path / "main"
+    agent_dir.mkdir()
+    (agent_dir / "AGENT.md").write_text("agent persona", encoding="utf-8")
+    (agent_dir / "USER.md").write_text("user profile", encoding="utf-8")
+
+    builder = ContextBuilder(tmp_path)
+    ctx1 = builder.load_agent_context("main")
+    assert ctx1.agent_md == "agent persona"
+
+    # Overwrite on disk but freeze mtime so cache hit fires
+    p = agent_dir / "AGENT.md"
+    mtime = p.stat().st_mtime
+    p.write_text("new persona", encoding="utf-8")
+    os.utime(p, (mtime, mtime))
+
+    ctx2 = builder.load_agent_context("main")
+    assert ctx2.agent_md == "agent persona"  # served from cache
