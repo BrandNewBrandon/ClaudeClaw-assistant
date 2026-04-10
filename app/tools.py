@@ -240,8 +240,8 @@ def _web_fetch(arguments: dict[str, Any]) -> str:
     return text or "(empty page)"
 
 
-def _disk_usage(args: dict[str, Any]) -> str:
-    raw = _require_string(args, "path")
+def _disk_usage(arguments: dict[str, Any]) -> str:
+    raw = _require_string(arguments, "path")
     path = Path(raw).expanduser()
     if not path.exists():
         return f"Path not found: {raw}"
