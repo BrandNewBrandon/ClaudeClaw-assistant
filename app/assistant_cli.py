@@ -1366,14 +1366,13 @@ def _cmd_update(project_root: Path) -> int:
 
     print("\nUpdate complete.")
 
-    # If the runtime is running, offer to restart it
+    # Auto-restart runtime if it was running
     pid_path = get_runtime_pid_file()
     pid = _read_pid(pid_path)
     if pid and _is_process_running(pid):
-        answer = input("\nThe runtime is currently running. Restart it now? [Y/n] ")
-        if answer.strip().lower() in ("", "y", "yes"):
-            _stop_runtime()
-            return _start_runtime(project_root)
+        print("\nRestarting runtime...")
+        _stop_runtime()
+        return _start_runtime(project_root)
 
     return 0
 
