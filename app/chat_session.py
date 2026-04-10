@@ -178,7 +178,7 @@ class TerminalChatSession:
             semantic=self._app_config.semantic_search_enabled,
         )
         agent_context = self._context_builder.load_agent_context(self._agent_name)
-        prior_session_id = self._session_ids.get(self._chat_id)
+        prior_session_id = self._session_ids.get(f"{self._chat_id}:{self._agent_name}")
 
         require_tool = is_obvious_web_request(user_message)
         tool_results: list[str] = []
@@ -231,7 +231,7 @@ class TerminalChatSession:
             tool_results.append(formatted)
 
         if last_session_id:
-            self._session_ids[self._chat_id] = last_session_id
+            self._session_ids[f"{self._chat_id}:{self._agent_name}"] = last_session_id
 
         final = last_output or "(no response)"
         self._cooldown.record(self._chat_id)
@@ -317,7 +317,7 @@ class TerminalChatSession:
                     print(_dim(f"  Switched to agent: {switch_to}"))
 
                 if reset_chat:
-                    self._session_ids.pop(self._chat_id, None)
+                    self._session_ids.pop(f"{self._chat_id}:{self._agent_name}", None)
                     print(_dim("  Session reset."))
 
                 if remember_text:
