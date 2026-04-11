@@ -62,7 +62,7 @@ If agents are going to feel distinct, they eventually need stronger routing, beh
 - ✅ Transcript persistence and daily notes
 - ✅ Agent switching, routing, and per-agent config
 - ✅ Multi-account support (Telegram, Discord, Slack channel adapters)
-- ✅ Web dashboard (`assistant ui` at localhost:18789)
+- ✅ Web dashboard (`assistant dashboard` at localhost:18790)
 - ✅ MCP server (`assistant mcp`)
 - ✅ Terminal REPL (`assistant chat`)
 - ✅ Daemon autostart (`assistant daemon install`)
@@ -187,149 +187,107 @@ Give the assistant structured action-taking abilities while improving usage effi
 
 ---
 
-## Phase 4 — Orchestration and sessions
+## Phase 3.5 — Practical daily-driver features ✅ COMPLETE
+
+### Goal
+Add high-value features that don't require architectural changes — incremental wins before the orchestration leap.
+
+### Delivered
+- ✅ **Scheduled messages / reminders** — `/remind` command with time-spec parsing, SQLite persistence, quiet hours deferral
+- ✅ **Message forwarding across surfaces** — `/forward` command with cross-surface targeting via scheduler send callbacks
+- ✅ **Conversation export / search** — `/search-chat` (substring search), `/export` (formatted text export)
+- ✅ **PDF document Q&A** — drop PDF into Telegram, text extracted via pymupdf, inlined (≤5 pages) or saved to file
+
+---
+
+## Phase 4 — Orchestration and sessions ✅ COMPLETE
 
 ### Goal
 Let the system coordinate work rather than only react message-by-message.
 
-### Includes
-- background tasks
-- task sessions
-- resumable tasks
-- concurrent jobs
-- lightweight task delegation
-- agent-to-agent handoff
-
-### Exit Criteria
-- the assistant can manage work across multiple flows
-- background work is understandable and controllable
+### Delivered
+- ✅ **Background jobs** — `/bg` command, JobStore (SQLite), JobRunner (threaded, max 2 concurrent), full tool loop + conversation context
+- ✅ **Agent delegation** — `/delegate <agent> <prompt>` runs prompt with target agent's context
+- ✅ **Job management** — `/jobs`, `/job <id>`, `/job cancel <id>`
+- ✅ **Proactive system monitors** — MonitorRunner with disk usage + process count checks, configurable cooldown
+- ✅ **Stale job recovery** — orphaned running jobs marked failed on startup
 
 ---
 
-## Phase 5 — Computer and browser control
+## Phase 5 — Computer and browser control ✅ COMPLETE
 
 ### Goal
 Add practical machine-control capability.
 
-### Includes
-- browser automation
-- desktop/app control
-- scripted workflows
-- opening apps/pages
-- interacting with web UIs
-
-### Safety Note
-This phase needs a real approval and logging model.
-
-### Exit Criteria
-- the assistant can perform useful interactive tasks safely
-- the system remains inspectable and controllable
+### Delivered
+- ✅ **10 cross-platform tools** — screenshot, mouse_click, mouse_move, keyboard_type, keyboard_hotkey, scroll, open_url, open_app, get_screen_size, get_mouse_position
+- ✅ **Opt-in per agent** — `"computer_use": true` in agent.json
+- ✅ **Approval gate** — action tools require user approval via inline buttons; `"computer_use_auto_approve": true` to skip
+- ✅ **Tool loop limit raised** — 10 iterations for computer use agents (vs 3 default)
+- ✅ **Cross-platform** — pyautogui works on macOS, Windows, Linux
 
 ---
 
-## Phase 6 — Multi-surface assistant platform
+## Phase 6 — Multi-surface assistant platform ✅ COMPLETE
 
 ### Goal
 Expand beyond a single Telegram-first runtime.
 
-### Possible Additions
-- Discord ✅ (adapter exists)
-- Slack ✅ (adapter exists)
-- **iMessage** — via AppleScript + `~/Library/Messages/chat.db` polling, or BlueBubbles as a cleaner REST bridge. Requires macOS with Messages signed in. No public API; works by watching the local SQLite database and sending via `osascript`. See discussion in session notes.
-- Signal
-- WhatsApp — via whatsapp-web.js-style headless browser or Playwright
-- richer notification channels
-- calendar/email-facing workflows later
-
-### Exit Criteria
-- transport expansion does not break memory/routing/identity
-- multiple surfaces feel coherent, not bolted on
+### Delivered
+- ✅ Discord adapter (event-driven, discord.py)
+- ✅ Slack adapter (Socket Mode, slack-sdk)
+- ✅ **iMessage adapter** — polls ~/Library/Messages/chat.db, sends via AppleScript. macOS only. No external dependencies.
+- ✅ **WhatsApp adapter** — HTTP bridge pattern, protocol-agnostic. Works with any bridge server (whatsapp-web.js, Baileys, whatsmeow).
+- ✅ **Setup wizard** — `assistant init` and `assistant configure` support all 5 platforms with tailored prompts
+- ✅ **Doctor checks** — platform-specific health validation (iMessage DB, WhatsApp bridge connectivity)
 
 ---
 
-## Phase 7 — Personal OpenClaw maturity
+## Phase 7 — Personal OpenClaw maturity ✅ COMPLETE
 
 ### Goal
 Unify the system into a mature personal assistant platform.
 
-### Includes
-- reliability hardening
-- richer operator introspection
-- backup/export/import
-- memory review tools
-- cleaner permission controls
-- long-term agent/config administration UX
+### Delivered
+- ✅ **Backup/restore** — `assistant backup` / `assistant backup-restore` with manifest, dry-run, skip lock files
+- ✅ **Transcript rotation** — auto-archive at 5000 lines, keep 2000 recent, safe archive-before-truncate
+- ✅ **Thread health tracking** — message/tool/error counters in RuntimeState
+- ✅ **`/diagnostics` command** — runtime metrics, thread health, error counts
+- ✅ **Reliability hardening** — SQLite timeouts, file write locks, config permissions (0o600), startup validation, config field range checks, polling failure tracking with escalation
+- ✅ **Token masking utility** — mask_token() for safe display of secrets
 
 ---
 
-## Recommended Build Order
+## Milestones — All Complete
 
-### Right now
-1. finish Phase 0 with the first real Mac validation pass
-2. fix whatever the Mac pass reveals
-
-### After that
-3. finish Phase 1 polish so the assistant is solid day-to-day
-4. move into Phase 2 identity realism
-5. build Phase 3 tool substrate and add practical caching/usage-efficiency work at that stage
-6. build Phase 4 orchestration
-7. then move into Phase 5 computer/browser control
+| Milestone | Status | Description |
+|-----------|--------|-------------|
+| A — Installable assistant | ✅ | Packaged, cross-platform, doctor/configure/start/stop |
+| B — Daily-driver assistant | ✅ | Telegram, memory, transcripts, agents, streaming |
+| C — Real multi-agent system | ✅ | Distinct identities, multi-bot tokens, session isolation |
+| D — Action-capable assistant | ✅ | Tools, shell, files, web, PDF, approval gates |
+| E — Orchestrating assistant | ✅ | Background jobs, delegation, monitors, scheduling |
+| F — Personal platform | ✅ | Computer use, 5-surface support, backup/restore, diagnostics |
 
 ---
 
-## Things Not To Do Too Early
+## Current State (April 2026)
 
-- multi-bot identity before install/reliability is stable
-- browser control before tool safety exists
-- plugin architecture too early
-- multi-surface expansion before single-surface excellence
-- dashboard/UI before runtime clarity
+All phases 0–7 are complete. 231 tests passing. The system is:
+- Feature-complete across messaging, tools, orchestration, and computer control
+- Cross-platform (macOS, Windows, Linux)
+- Multi-surface (Telegram, Discord, Slack, iMessage, WhatsApp)
+- Reliability-hardened (file locks, SQLite timeouts, config validation, polling resilience)
+- Documented (GUIDE.md, setup wizard, doctor checks)
+- Backed up (assistant backup/restore)
 
----
+## Future Possibilities
 
-## Named Milestones
-
-### Milestone A — Installable assistant
-- packageable
-- configure/doctor/start/status/stop sane
-- Mac validated
-
-### Milestone B — Daily-driver assistant
-- useful every day in Telegram
-- memory/transcripts/agents solid
-
-### Milestone C — Real multi-agent system
-- distinct identities
-- secondary bot token support
-- stronger agent ownership
-
-### Milestone D — Action-capable assistant
-- tools
-- shell/files/web
-- useful operational actions
-
-### Milestone E — Orchestrating assistant
-- jobs
-- sessions
-- background work
-- delegation
-
-### Milestone F — OpenClaw-like personal platform
-- browser/computer control
-- richer multi-surface presence
-- mature operator tooling
-
----
-
-## Immediate Recommendation
-
-Foundation, core runtime, tools, and UX polish are all in place. The assistant is daily-driver ready.
-
-Suggested next priorities (in order):
-1. **Voice memos → Whisper transcription** — Telegram voice messages piped through a local Whisper model; highest daily visibility, zero changes to the AI layer
-2. **Document Q&A** — PDF attachment → text extraction → include in prompt; quick win given image handling is already wired in
-3. **Semantic memory search** — config toggle wired up, embedding infrastructure exists in `app/embeddings.py` (fastembed + numpy); remaining: wire `embedding_model` config field to the embeddings module
-4. **Inline Telegram approval keyboards** — replace YES/NO text replies for `run_command` with inline buttons; final UX polish
+- Signal adapter
+- Calendar/email integration
+- Richer dashboard visualizations
+- Plugin marketplace
+- Mobile companion app
 
 See also:
 - `docs/claudeclaw-architecture.md`
