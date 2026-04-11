@@ -866,6 +866,7 @@ class _Handler(BaseHTTPRequestHandler):
     _agents_dir: Path
     _shared_dir: Path
     _db_path: Path
+    _jobs_db_path: Path
     _config_path: Path
     _dashboard_token: str
     _chat_sessions: dict[str, Any]
@@ -1004,7 +1005,46 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(_api_gap_check_post(body, self._gap_jobs, self._gap_lock))
             return
 
+        if path == "/api/webhook":
+            length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                body = json.loads(body_bytes.decode("utf-8"))
+            except ValueError:
+                self._send_json({"error": "Invalid JSON"}, 400)
+                return
+            self._handle_webhook(body)
+            return
+
         self._send_json({"error": "Not found"}, 404)
+
+    def _handle_webhook(self, body: dict) -> None:
+        text = str(body.get("text", "")).strip()
+        if not text:
+            self._send_json({"error": "text is required"}, 400)
+            return
+
+        chat_id = str(body.get("chat_id", "webhook")).strip() or "webhook"
+        agent = str(body.get("agent", "main")).strip() or "main"
+        surface = str(body.get("surface", "")).strip()
+        account_id = str(body.get("account_id", "primary")).strip()
+
+        # Create a background job via JobStore
+        from ..job_store import JobStore
+        store = JobStore(self._jobs_db_path)
+        job_id = store.create_job(
+            chat_id=chat_id,
+            account_id=account_id,
+            surface=surface,
+            agent=agent,
+            prompt=text,
+        )
+
+        self._send_json({
+            "ok": True,
+            "job_id": job_id,
+            "message": f"Job created. Result will be delivered to chat_id={chat_id}.",
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -1031,6 +1071,7 @@ class WebDashboard:
         self._agents_dir = agents_dir or Path(cfg.get("agents_dir", str(project_root / "agents"))).expanduser()
         self._shared_dir = shared_dir or Path(cfg.get("shared_dir", str(project_root / "shared"))).expanduser()
         self._db_path = get_state_dir() / "tasks.db"
+        self._jobs_db_path = get_state_dir() / "jobs.db"
         self._config_path = get_config_file()
         self._dashboard_token: str = str(cfg.get("dashboard_token", ""))
         self._server: ThreadingHTTPServer | None = None
@@ -1049,6 +1090,7 @@ class WebDashboard:
         agents_dir = self._agents_dir
         shared_dir = self._shared_dir
         db_path = self._db_path
+        jobs_db_path = self._jobs_db_path
         config_path = self._config_path
         chat_sessions = self._chat_sessions
         chat_jobs = self._chat_jobs
@@ -1062,6 +1104,7 @@ class WebDashboard:
         BoundHandler._agents_dir = agents_dir
         BoundHandler._shared_dir = shared_dir
         BoundHandler._db_path = db_path
+        BoundHandler._jobs_db_path = jobs_db_path
         BoundHandler._config_path = config_path
         BoundHandler._dashboard_token = self._dashboard_token
         BoundHandler._chat_sessions = chat_sessions
