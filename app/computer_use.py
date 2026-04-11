@@ -9,7 +9,7 @@ import sys
 import tempfile
 import webbrowser
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 LOGGER = logging.getLogger(__name__)
 
@@ -198,16 +198,49 @@ def get_mouse_position(arguments: dict[str, Any]) -> str:
 
 # ── Tool registration ────────────────────────────────────────────────────────
 
-def register_computer_use_tools(registry, *, approval_required: bool = True) -> None:
+ApprovalFn = Callable[[str], str]
+"""Approval callback: takes action description, returns approval message or empty string if approved."""
+
+
+def _make_gated_handler(
+    handler: Callable[[dict[str, Any]], str],
+    action_label: str,
+    approval_fn: ApprovalFn | None,
+) -> Callable[[dict[str, Any]], str]:
+    """Wrap an action handler with an approval gate."""
+    if approval_fn is None:
+        return handler
+
+    def wrapper(arguments: dict[str, Any]) -> str:
+        # Build a human-readable description of the action
+        desc = f"[Computer Use] {action_label}"
+        if arguments:
+            details = ", ".join(f"{k}={v}" for k, v in arguments.items())
+            desc = f"{desc}: {details}"
+        result = approval_fn(desc)
+        if result:
+            return result  # Approval pending — return the approval message
+        return handler(arguments)
+
+    return wrapper
+
+
+def register_computer_use_tools(
+    registry,
+    *,
+    approval_fn: ApprovalFn | None = None,
+) -> None:
     """Register computer use tools on a ToolRegistry.
 
-    When ``approval_required=True`` (default), mouse/keyboard actions are
-    wrapped to include a safety note. Screenshot, open_url, get_screen_size,
-    and get_mouse_position are always allowed (read-only).
+    ``approval_fn``: if provided, action tools (mouse, keyboard, scroll,
+    open) are gated behind it. The function receives a description string
+    and returns an approval-pending message (non-empty) or empty string
+    if pre-approved. Read-only tools (screenshot, screen size, mouse
+    position) are never gated.
     """
     from .tools import ToolSpec
 
-    # Read-only tools — always safe
+    # Read-only tools — always safe, no approval needed
     registry.register(
         ToolSpec("screenshot", "Capture a screenshot of the screen. Returns the file path to the image.", {}),
         screenshot,
@@ -221,50 +254,50 @@ def register_computer_use_tools(registry, *, approval_required: bool = True) -> 
         get_mouse_position,
     )
 
-    # Action tools
+    # Action tools — gated behind approval_fn if provided
     registry.register(
-        ToolSpec("mouse_click", "Click at screen coordinates.", {
+        ToolSpec("mouse_click", "Click at screen coordinates. Requires approval.", {
             "x": "integer x coordinate",
             "y": "integer y coordinate",
             "button": "(optional) left, right, or middle (default: left)",
             "clicks": "(optional) number of clicks (default: 1)",
         }),
-        mouse_click,
+        _make_gated_handler(mouse_click, "mouse_click", approval_fn),
     )
     registry.register(
-        ToolSpec("mouse_move", "Move the mouse cursor to screen coordinates.", {
+        ToolSpec("mouse_move", "Move the mouse cursor to screen coordinates. Requires approval.", {
             "x": "integer x coordinate",
             "y": "integer y coordinate",
         }),
-        mouse_move,
+        _make_gated_handler(mouse_move, "mouse_move", approval_fn),
     )
     registry.register(
-        ToolSpec("keyboard_type", "Type text using the keyboard.", {
+        ToolSpec("keyboard_type", "Type text using the keyboard. Requires approval.", {
             "text": "text to type",
         }),
-        keyboard_type,
+        _make_gated_handler(keyboard_type, "keyboard_type", approval_fn),
     )
     registry.register(
-        ToolSpec("keyboard_hotkey", "Press a keyboard shortcut.", {
+        ToolSpec("keyboard_hotkey", "Press a keyboard shortcut. Requires approval.", {
             "keys": "keys joined by + (e.g., 'ctrl+c', 'cmd+space', 'alt+tab')",
         }),
-        keyboard_hotkey,
+        _make_gated_handler(keyboard_hotkey, "keyboard_hotkey", approval_fn),
     )
     registry.register(
-        ToolSpec("scroll", "Scroll the screen up or down.", {
+        ToolSpec("scroll", "Scroll the screen up or down. Requires approval.", {
             "amount": "integer (positive=up, negative=down, default=3)",
         }),
-        scroll_screen,
+        _make_gated_handler(scroll_screen, "scroll", approval_fn),
     )
     registry.register(
-        ToolSpec("open_url", "Open a URL in the default browser.", {
+        ToolSpec("open_url", "Open a URL in the default browser. Requires approval.", {
             "url": "URL to open",
         }),
-        open_url,
+        _make_gated_handler(open_url, "open_url", approval_fn),
     )
     registry.register(
-        ToolSpec("open_app", "Open an application by name.", {
+        ToolSpec("open_app", "Open an application by name. Requires approval.", {
             "name": "application name",
         }),
-        open_app,
+        _make_gated_handler(open_app, "open_app", approval_fn),
     )

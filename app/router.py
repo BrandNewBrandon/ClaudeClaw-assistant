@@ -991,10 +991,25 @@ class AssistantRouter:
         if _agent_cfg.computer_use:
             from .computer_use import is_available as _cu_available, register_computer_use_tools
             if _cu_available():
-                register_computer_use_tools(tool_registry)
+                def _cu_approval(desc: str) -> str:
+                    msg, approval_id = _approval_store.request(_surface, _account_id, _chat_id, desc)
+                    if _channel is not None:
+                        try:
+                            buttons = [[
+                                {"text": "Approve", "callback_data": f"a:{approval_id}"},
+                                {"text": "Deny", "callback_data": f"d:{approval_id}"},
+                            ]]
+                            mid = _channel.send_message_with_buttons(_chat_id, msg, buttons)
+                            if mid is not None:
+                                return "Waiting for user approval via inline buttons."
+                        except Exception:
+                            pass
+                    return msg
+                register_computer_use_tools(tool_registry, approval_fn=_cu_approval)
                 LOGGER.info("Computer use tools enabled for agent=%s", active_agent)
 
-        tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
+        _max_tools = 10 if _agent_cfg.computer_use else 3
+        tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
         skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         tool_results: list[str] = []
         last_output = ""
@@ -1149,9 +1164,24 @@ class AssistantRouter:
         if _agent_cfg.computer_use:
             from .computer_use import is_available as _cu_available, register_computer_use_tools
             if _cu_available():
-                register_computer_use_tools(tool_registry)
+                def _cu_approval_stream(desc: str) -> str:
+                    msg, approval_id = _approval_store.request("", "", _chat_id, desc)
+                    if _channel is not None:
+                        try:
+                            buttons = [[
+                                {"text": "Approve", "callback_data": f"a:{approval_id}"},
+                                {"text": "Deny", "callback_data": f"d:{approval_id}"},
+                            ]]
+                            mid = _channel.send_message_with_buttons(_chat_id, msg, buttons)
+                            if mid is not None:
+                                return "Waiting for user approval via inline buttons."
+                        except Exception:
+                            pass
+                    return msg
+                register_computer_use_tools(tool_registry, approval_fn=_cu_approval_stream)
 
-        tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
+        _max_tools = 10 if _agent_cfg.computer_use else 3
+        tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
         skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         require_tool = is_obvious_web_request(message_text)
 

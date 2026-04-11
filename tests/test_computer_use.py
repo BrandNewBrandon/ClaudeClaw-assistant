@@ -162,6 +162,52 @@ def test_register_computer_use_tools_adds_all():
         assert name in names, f"Missing tool: {name}"
 
 
+def test_approval_gate_blocks_action():
+    """Action tools should call approval_fn and return its message when non-empty."""
+    registry = ToolRegistry()
+    approval_calls: list[str] = []
+
+    def fake_approval(desc: str) -> str:
+        approval_calls.append(desc)
+        return "Awaiting approval..."
+
+    register_computer_use_tools(registry, approval_fn=fake_approval)
+    result = registry.execute(
+        __import__("app.tools", fromlist=["ToolCall"]).ToolCall(
+            name="mouse_click", arguments={"x": 100, "y": 200}
+        )
+    )
+    assert result.output == "Awaiting approval..."
+    assert len(approval_calls) == 1
+    assert "mouse_click" in approval_calls[0]
+
+
+def test_approval_gate_allows_when_empty():
+    """Action tools should execute normally when approval_fn returns empty string."""
+    registry = ToolRegistry()
+    register_computer_use_tools(registry, approval_fn=lambda desc: "")
+    with patch("app.computer_use._require_pyautogui") as mock_pag:
+        from app.tools import ToolCall
+        result = registry.execute(ToolCall(name="mouse_click", arguments={"x": 50, "y": 50}))
+    assert "Clicked" in result.output
+
+
+def test_read_only_tools_bypass_approval():
+    """Screenshot and other read-only tools should never go through approval."""
+    approval_calls: list[str] = []
+    registry = ToolRegistry()
+    register_computer_use_tools(
+        registry,
+        approval_fn=lambda desc: (approval_calls.append(desc) or "blocked"),
+    )
+    with patch("app.computer_use._require_pyautogui") as mock_pag:
+        mock_pag.return_value.size.return_value = MagicMock(width=1920, height=1080)
+        from app.tools import ToolCall
+        result = registry.execute(ToolCall(name="get_screen_size", arguments={}))
+    assert "1920x1080" in result.output
+    assert len(approval_calls) == 0  # No approval called for read-only
+
+
 def test_agent_config_computer_use_flag():
     from app.agent_config import AgentConfig, load_agent_config
     import json
