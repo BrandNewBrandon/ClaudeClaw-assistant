@@ -832,7 +832,21 @@ Works on macOS, Windows, and Linux. Requires a display (will not work over SSH w
 
 ## iMessage setup
 
-Connect the assistant to iMessage on macOS.
+Connect the assistant to iMessage on macOS. The assistant uses the Mac's Apple ID to
+send and receive messages — you text the Mac's Apple ID from your phone, and the
+assistant replies back to you.
+
+### How messaging works
+
+The Mac acts as a separate iMessage identity. You text it like you would text any other person:
+
+1. Set up a Mac with its own Apple ID (e.g. `assistant@icloud.com`)
+2. From your phone, open Messages and start a conversation with `assistant@icloud.com`
+3. Send a message — the Mac receives it, the assistant generates a reply, and sends it back
+4. On your phone it looks like a normal iMessage conversation
+
+**You are not texting yourself.** You are texting the Mac's Apple ID. The Mac is the "other person"
+in the conversation, and the assistant is the one replying.
 
 ### Requirements
 
@@ -856,21 +870,41 @@ Or add manually to `config.json`:
 }
 ```
 
-Chat IDs are phone numbers (with country code) or email addresses of the contacts
-you want the assistant to respond to.
+`allowed_chat_ids` should contain your phone number or Apple ID email — this is the
+contact the assistant will respond to. You can add multiple contacts.
 
-### How it works
+### How it works internally
 
 - Incoming messages are read from the local Messages database (`~/Library/Messages/chat.db`)
 - Outgoing messages are sent via AppleScript through the Messages app
 - No internet connection is needed for the iMessage adapter itself (messages go through Apple's servers as normal)
 - The database is read-only — the adapter never modifies your message history
 
+### Troubleshooting handle IDs
+
+If the assistant is not picking up your messages, the contact identifier in the Messages
+database may not match what you entered in `allowed_chat_ids`. Messages can identify
+senders by phone number (`+15551234567`) or by email (`user@icloud.com`) depending on
+how the conversation was started.
+
+To check what handle ID your messages are using, open Terminal on the Mac and run:
+
+```bash
+sqlite3 ~/Library/Messages/chat.db "SELECT h.id FROM handle h ORDER BY h.ROWID DESC LIMIT 10;"
+```
+
+This shows the 10 most recent contact identifiers. Use the one that matches your
+phone number or email in `allowed_chat_ids`.
+
+If you get a "permission denied" error, you need to grant Full Disk Access to Terminal
+(System Settings → Privacy & Security → Full Disk Access).
+
 ### Limitations
 
 - macOS only — will not work on Windows or Linux
 - Requires Full Disk Access permission
 - Group chats are not supported (individual conversations only)
+- The assistant replies as the Mac's Apple ID — recipients see messages from that account
 
 ---
 

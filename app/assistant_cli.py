@@ -432,16 +432,29 @@ Config values:
     "imessage": """\
 iMessage setup (macOS only):
 
+How it works:
+  The Mac acts as a separate iMessage identity. You text the Mac's
+  Apple ID from your phone, and the assistant replies back to you.
+  It's like texting another person — the Mac is the "other person."
+
 Requirements:
-  1. macOS with the Messages app signed in to iMessage
+  1. macOS with the Messages app signed in to its own Apple ID
   2. Full Disk Access granted to Terminal (or your IDE):
      System Settings → Privacy & Security → Full Disk Access → add Terminal
   3. No bot token needed — iMessage works locally via the Messages database
 
-Chat IDs:
-  Chat IDs are phone numbers (e.g. +15551234567) or email addresses
-  (e.g. user@icloud.com) of the contacts you want the assistant to
-  respond to.
+Allowed contacts:
+  Enter your phone number or Apple ID email — this is who the
+  assistant will respond to. Example: +15551234567 or user@icloud.com
+
+  To start a conversation, text the Mac's Apple ID from your phone.
+
+Troubleshooting:
+  If messages aren't being picked up, the handle ID in the Messages
+  database may differ from what you entered. Run this on the Mac to
+  check what IDs your messages use:
+    sqlite3 ~/Library/Messages/chat.db \\
+      "SELECT id FROM handle ORDER BY ROWID DESC LIMIT 10;"
 
 Note: iMessage is macOS only. It will not work on Windows or Linux.
 """,
