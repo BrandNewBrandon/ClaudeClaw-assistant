@@ -68,6 +68,8 @@ class AppConfig:
     compaction_token_budget: int = 12_000
     session_reset_daily_hour: int | None = None
     session_idle_reset_minutes: int | None = None
+    # Auto-memory extraction
+    auto_memory: bool = False
 
 
 class ConfigError(Exception):
@@ -299,4 +301,5 @@ def load_config(config_path: str | Path) -> AppConfig:
         compaction_token_budget=_compaction_token_budget,
         session_reset_daily_hour=_session_reset_daily_hour,
         session_idle_reset_minutes=int(raw.get("session_idle_reset_minutes")) if raw.get("session_idle_reset_minutes") is not None else None,
+        auto_memory=bool(raw.get("auto_memory", False)),
     )
