@@ -25,6 +25,8 @@ class TelegramMessage:
     text: str
     raw: dict[str, Any]
     image_path: str | None = None  # temp file path if a photo was attached
+    document_path: str | None = None  # temp file path if a PDF was attached
+    document_name: str | None = None  # original filename
 
 
 @dataclass(frozen=True)
@@ -86,9 +88,10 @@ class TelegramClient:
             text = message.get("text")
             photo_sizes = message.get("photo")  # present when a photo is sent
             caption = message.get("caption", "")  # text on photo messages
+            document = message.get("document")  # present when a file is sent
 
-            # Skip messages that have neither text nor a photo
-            if not isinstance(text, str) and not photo_sizes:
+            # Skip messages that have neither text nor a photo nor a document
+            if not isinstance(text, str) and not photo_sizes and not document:
                 continue
 
             # For photo messages use the caption as the user's text
@@ -105,6 +108,18 @@ class TelegramClient:
                     import logging
                     logging.getLogger(__name__).warning("Failed to download Telegram photo: %s", exc)
 
+            # Download PDF document if one is attached
+            document_path: str | None = None
+            document_name: str | None = None
+            if document and document.get("mime_type") == "application/pdf":
+                try:
+                    doc_file_id = document["file_id"]
+                    document_name = document.get("file_name", "document.pdf")
+                    document_path = self._download_document(doc_file_id)
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning("Failed to download Telegram document: %s", exc)
+
             results.append(
                 TelegramMessage(
                     update_id=int(item["update_id"]),
@@ -113,6 +128,8 @@ class TelegramClient:
                     text=effective_text,
                     raw=item,
                     image_path=image_path,
+                    document_path=document_path,
+                    document_name=document_name,
                 )
             )
 
@@ -140,6 +157,33 @@ class TelegramClient:
         if "." in file_path:
             suffix = "." + file_path.rsplit(".", 1)[-1]
         fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="assistant_img_")
+        try:
+            import os
+            os.write(fd, data)
+        finally:
+            import os
+            os.close(fd)
+        return tmp_path
+
+    def _download_document(self, file_id: str) -> str:
+        """Download a Telegram document to a temp file. Returns the file path."""
+        file_info = self._post_json("getFile", {"file_id": file_id})
+        file_path = file_info.get("file_path", "")
+        if not file_path:
+            raise TelegramError(f"getFile returned no file_path for file_id={file_id!r}")
+
+        download_url = f"{self._file_base_url}/{file_path}"
+        request = urllib.request.Request(download_url)
+        try:
+            with urllib.request.urlopen(request, timeout=30, context=self._ssl_context) as resp:
+                data = resp.read()
+        except urllib.error.URLError as exc:
+            raise TelegramError(f"Document download failed: {exc}") from exc
+
+        suffix = ".pdf"
+        if "." in file_path:
+            suffix = "." + file_path.rsplit(".", 1)[-1]
+        fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="assistant_doc_")
         try:
             import os
             os.write(fd, data)

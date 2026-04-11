@@ -26,6 +26,8 @@ class ChannelMessage:
     raw: dict[str, Any] = field(default_factory=dict)
     # Local temp file path for an attached image, if any (cleaned up by the router after use).
     image_path: str | None = None
+    document_path: str | None = None
+    document_name: str | None = None
 
 
 @dataclass(frozen=True)
