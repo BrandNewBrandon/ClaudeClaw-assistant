@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import monotonic
+from typing import Any
 
 
 @dataclass
@@ -30,6 +31,16 @@ class RuntimeState:
     last_reply_at: str | None = None
     last_message_duration_ms: int | None = None
     last_model_duration_ms: int | None = None
+
+    # Thread health tracking
+    messages_processed: int = 0
+    tool_calls_executed: int = 0
+    errors_count: int = 0
+    active_threads: dict[str, str] = None  # name -> status
+
+    def __post_init__(self) -> None:
+        if self.active_threads is None:
+            self.active_threads = {}
 
     def mark_started(
         self,
@@ -96,6 +107,39 @@ class RuntimeState:
         self.active_agent_display_name = display_name
         self.active_agent_description = description
         self.routing_source = routing_source
+
+    def increment_messages(self) -> None:
+        self.messages_processed += 1
+
+    def increment_tool_calls(self) -> None:
+        self.tool_calls_executed += 1
+
+    def increment_errors(self) -> None:
+        self.errors_count += 1
+
+    def register_thread(self, name: str, status: str = "running") -> None:
+        self.active_threads[name] = status
+
+    def unregister_thread(self, name: str) -> None:
+        self.active_threads.pop(name, None)
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Return a snapshot of runtime diagnostics."""
+        return {
+            "process_id": self.process_id,
+            "started_at": self.started_at,
+            "last_message_at": self.last_message_at,
+            "messages_processed": self.messages_processed,
+            "tool_calls_executed": self.tool_calls_executed,
+            "errors_count": self.errors_count,
+            "last_error": self.last_error,
+            "active_agent": self.active_agent,
+            "claude_model": self.claude_model,
+            "claude_effort": self.claude_effort,
+            "last_model_duration_ms": self.last_model_duration_ms,
+            "last_message_duration_ms": self.last_message_duration_ms,
+            "active_threads": dict(self.active_threads),
+        }
 
 
 def _now_iso() -> str:
