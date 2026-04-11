@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from .model_runner import ModelRunner
     from .plugins import PluginRegistry
     from .scheduler import Scheduler
+    from .job_store import JobStore
+    from .job_runner import JobRunner
+    from .monitors import MonitorRunner
 
 
 class CommandHandler:
@@ -26,6 +29,9 @@ class CommandHandler:
         model_runner: ModelRunner | None = None,
         plugin_registry: PluginRegistry | None = None,
         briefing_thread: BriefingThread | None = None,
+        job_store: "JobStore | None" = None,
+        job_runner: "JobRunner | None" = None,
+        monitor_runner: "MonitorRunner | None" = None,
     ) -> None:
         self._agents_dir = agents_dir
         self._default_model = default_model
@@ -36,6 +42,9 @@ class CommandHandler:
         self._model_runner = model_runner
         self._plugin_registry = plugin_registry
         self._briefing_thread = briefing_thread
+        self._job_store = job_store
+        self._job_runner = job_runner
+        self._monitor_runner = monitor_runner
 
     def _persist_quiet_hours(self, start: str | None, end: str | None) -> None:
         """Write quiet hours to config.json so they survive restarts."""
@@ -628,6 +637,104 @@ class CommandHandler:
                 lines.append(f"[{entry.timestamp[:16]}] {direction}: {entry.message_text}")
             return ("\n".join(lines), None, False, None)
 
+        # ── /bg <prompt> ─────────────────────────────────────────────────────
+        if stripped.startswith("/bg "):
+            prompt = stripped.removeprefix("/bg ").strip()
+            if not prompt:
+                return ("Usage: /bg <prompt>", None, False, None)
+            if self._job_store is None:
+                return ("Background jobs not available.", None, False, None)
+            job_id = self._job_store.create_job(
+                chat_id=chat_id or "",
+                account_id=account_id or "primary",
+                surface=surface,
+                agent=active_agent,
+                prompt=prompt,
+            )
+            return (f"Background job queued [{job_id}]. You'll be notified when it completes.", None, False, None)
+
+        # ── /jobs ────────────────────────────────────────────────────────────
+        if stripped == "/jobs":
+            if self._job_store is None:
+                return ("Background jobs not available.", None, False, None)
+            jobs = self._job_store.list_jobs(chat_id)
+            if not jobs:
+                return ("No jobs found.", None, False, None)
+            lines = [f"Jobs ({len(jobs)}):"]
+            for job in jobs:
+                status_icon = {"pending": "⏳", "running": "▶️", "completed": "✅", "failed": "❌", "cancelled": "🚫"}.get(job.status, "?")
+                preview = job.prompt[:60] + ("…" if len(job.prompt) > 60 else "")
+                lines.append(f"  {status_icon} [{job.id}] {job.status} — {preview}")
+            return ("\n".join(lines), None, False, None)
+
+        # ── /job <id> or /job cancel <id> ────────────────────────────────────
+        if stripped.startswith("/job "):
+            rest = stripped.removeprefix("/job ").strip()
+            if self._job_store is None:
+                return ("Background jobs not available.", None, False, None)
+            if rest.startswith("cancel "):
+                job_id = rest.removeprefix("cancel ").strip()
+                if self._job_store.cancel_job(job_id):
+                    return (f"Job {job_id} cancelled.", None, False, None)
+                return (f"Could not cancel job {job_id} (not found or already completed).", None, False, None)
+            job = self._job_store.get_job(rest)
+            if job is None:
+                return (f"No job found with ID {rest}.", None, False, None)
+            lines = [
+                f"Job [{job.id}]",
+                f"Status: {job.status}",
+                f"Agent: {job.agent}",
+                f"Prompt: {job.prompt[:200]}",
+                f"Created: {job.created_at.isoformat()[:16]}",
+            ]
+            if job.started_at:
+                lines.append(f"Started: {job.started_at.isoformat()[:16]}")
+            if job.completed_at:
+                lines.append(f"Completed: {job.completed_at.isoformat()[:16]}")
+            if job.result:
+                lines.append(f"Result: {job.result[:500]}")
+            if job.error:
+                lines.append(f"Error: {job.error}")
+            return ("\n".join(lines), None, False, None)
+
+        # ── /delegate <agent> <prompt> ───────────────────────────────────────
+        if stripped.startswith("/delegate "):
+            rest = stripped.removeprefix("/delegate ").strip()
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                return ("Usage: /delegate <agent> <prompt>", None, False, None)
+            target_agent, prompt = parts[0], parts[1]
+            if not (self._agents_dir / target_agent).exists():
+                return (f"Unknown agent: {target_agent}", None, False, None)
+            if self._job_store is None:
+                return ("Background jobs not available.", None, False, None)
+            job_id = self._job_store.create_job(
+                chat_id=chat_id or "",
+                account_id=account_id or "primary",
+                surface=surface,
+                agent=target_agent,
+                prompt=prompt,
+            )
+            return (f"Delegated to {target_agent} [{job_id}]. You'll be notified when it completes.", None, False, None)
+
+        # ── /monitors ────────────────────────────────────────────────────────
+        if stripped == "/monitors" or stripped.startswith("/monitors "):
+            if self._monitor_runner is None:
+                return ("Monitors not available.", None, False, None)
+            parts = stripped.split(maxsplit=1)
+            sub = parts[1].strip().lower() if len(parts) > 1 else None
+            if sub == "on":
+                self._monitor_runner.enabled = True
+                return ("Monitors enabled.", None, False, None)
+            if sub == "off":
+                self._monitor_runner.enabled = False
+                return ("Monitors disabled.", None, False, None)
+            names = self._monitor_runner.monitor_names()
+            status = "enabled" if self._monitor_runner.enabled else "disabled"
+            if not names:
+                return (f"Monitors: {status}. No monitors registered.", None, False, None)
+            return (f"Monitors: {status}\nActive: {', '.join(names)}", None, False, None)
+
         # ── /help ─────────────────────────────────────────────────────────────
         if stripped == "/help":
             skill_commands: list[str] = []
@@ -663,6 +770,13 @@ class CommandHandler:
                     "/briefing on / off — enable or disable scheduled briefings",
                     "/briefing set <HH> [HH …] — set briefing times (e.g. /briefing set 9 18)",
                     "/briefing add <HH> / remove <HH> — add or remove a briefing time",
+                    "/bg <prompt> — run a prompt in the background",
+                    "/jobs — list background jobs",
+                    "/job <id> — show job status and result",
+                    "/job cancel <id> — cancel a job",
+                    "/delegate <agent> <prompt> — delegate a task to another agent",
+                    "/monitors — show system monitor status",
+                    "/monitors on / off — enable or disable monitors",
                     "/consolidate [days] — consolidate daily notes into long-term memory",
                     "/remember <text> — save to daily notes",
                     "/note <text> — alias for /remember",
