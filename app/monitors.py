@@ -128,7 +128,8 @@ def process_count_monitor(*, threshold: int = 500) -> MonitorFn:
             count = len(result.stdout.strip().splitlines()) - 1
             if count >= threshold:
                 return f"High process count: {count} processes running (threshold: {threshold})"
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("Process count check failed: %s", exc)
+            return None
         return None
     return check

@@ -234,6 +234,13 @@ def load_config(config_path: str | Path) -> AppConfig:
         if not (0 <= hour <= 23):
             raise ConfigError(f"Invalid briefing time: {hour}. Must be 0-23.")
 
+    _consolidation_hour = int(raw.get("consolidation_hour", 2))
+    if not (0 <= _consolidation_hour <= 23):
+        raise ConfigError(f"Invalid consolidation_hour: {_consolidation_hour}. Must be 0-23.")
+    _session_reset_daily_hour = int(raw.get("session_reset_daily_hour")) if raw.get("session_reset_daily_hour") is not None else None
+    if _session_reset_daily_hour is not None and not (0 <= _session_reset_daily_hour <= 23):
+        raise ConfigError(f"Invalid session_reset_daily_hour: {_session_reset_daily_hour}. Must be 0-23.")
+
     return AppConfig(
         telegram_bot_token=primary_account.token,
         allowed_chat_ids=primary_account.allowed_chat_ids,
@@ -257,7 +264,7 @@ def load_config(config_path: str | Path) -> AppConfig:
         max_prompt_chars=int(raw.get("max_prompt_chars", 24_000)),
         consolidation_enabled=bool(raw.get("consolidation_enabled", True)),
         consolidation_keep_days=int(raw.get("consolidation_keep_days", 3)),
-        consolidation_hour=int(raw.get("consolidation_hour", 2)),
+        consolidation_hour=_consolidation_hour,
         semantic_search_enabled=bool(raw.get("semantic_search_enabled", True)),
         embedding_model=str(raw.get("embedding_model", "BAAI/bge-small-en-v1.5")),
         dashboard_token=str(raw.get("dashboard_token", "")),
@@ -268,6 +275,6 @@ def load_config(config_path: str | Path) -> AppConfig:
         briefing_times=[int(h) for h in raw.get("briefing_times", [9])],
         compaction_enabled=bool(raw.get("compaction_enabled", True)),
         compaction_token_budget=int(raw.get("compaction_token_budget", 12_000)),
-        session_reset_daily_hour=int(raw.get("session_reset_daily_hour")) if raw.get("session_reset_daily_hour") is not None else None,
+        session_reset_daily_hour=_session_reset_daily_hour,
         session_idle_reset_minutes=int(raw.get("session_idle_reset_minutes")) if raw.get("session_idle_reset_minutes") is not None else None,
     )
