@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from app.config import ConfigError, load_config
 
 
@@ -113,6 +115,50 @@ def test_load_config_parses_accounts_and_routing(tmp_path: Path) -> None:
     assert config.routing["telegram-builder"].chat_agent_map == {"456": "builder"}
     assert config.telegram_bot_token == "token-a"
     assert config.default_agent == "main"
+
+
+def test_load_config_rejects_invalid_quiet_hours(tmp_path: Path) -> None:
+    """Invalid quiet_hours format should raise ConfigError."""
+    config_data = {
+        "telegram_bot_token": "test",
+        "allowed_chat_ids": ["123"],
+        "default_agent": "main",
+        "claude_timeout_seconds": 60,
+        "telegram_poll_timeout_seconds": 30,
+        "typing_interval_seconds": 4,
+        "claude_working_directory_mode": "agent_dir",
+        "model_provider": "claude-code",
+        "project_root": str(tmp_path),
+        "agents_dir": str(tmp_path / "agents"),
+        "shared_dir": str(tmp_path / "shared"),
+        "quiet_hours_start": "invalid",
+    }
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="quiet_hours_start"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_invalid_briefing_times(tmp_path: Path) -> None:
+    """Briefing times outside 0-23 should raise ConfigError."""
+    config_data = {
+        "telegram_bot_token": "test",
+        "allowed_chat_ids": ["123"],
+        "default_agent": "main",
+        "claude_timeout_seconds": 60,
+        "telegram_poll_timeout_seconds": 30,
+        "typing_interval_seconds": 4,
+        "claude_working_directory_mode": "agent_dir",
+        "model_provider": "claude-code",
+        "project_root": str(tmp_path),
+        "agents_dir": str(tmp_path / "agents"),
+        "shared_dir": str(tmp_path / "shared"),
+        "briefing_times": [9, 25],
+    }
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="briefing time"):
+        load_config(config_path)
 
 
 def test_load_config_rejects_unsupported_provider(tmp_path: Path) -> None:

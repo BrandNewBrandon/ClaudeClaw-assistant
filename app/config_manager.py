@@ -102,6 +102,13 @@ def write_config(path: str | Path, data: dict[str, Any]) -> None:
     config_path.parent.mkdir(parents=True, exist_ok=True)
     sanitized = _sanitize_config_data(data)
     config_path.write_text(json.dumps(sanitized, indent=2) + "\n", encoding="utf-8")
+    # Restrict permissions — config contains tokens
+    try:
+        import os
+        if os.name != "nt":  # chmod not meaningful on Windows
+            config_path.chmod(0o600)
+    except OSError:
+        pass  # Non-fatal — best effort
 
 
 def ensure_config_exists(config_path: str | Path, example_path: str | Path) -> Path:

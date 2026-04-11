@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.config_manager import ensure_config_exists, load_raw_config, update_config_values
+from app.config_manager import ensure_config_exists, load_raw_config, update_config_values, write_config
 
 
 def test_ensure_config_exists_copies_example_when_missing(tmp_path: Path) -> None:
@@ -61,6 +61,17 @@ def test_ensure_config_exists_sanitizes_placeholder_values(tmp_path: Path) -> No
     assert config["telegram_bot_token"] == ""
     assert config["allowed_chat_ids"] == ["123"]
     assert config["chat_agent_map"] == {"123": "main"}
+
+
+def test_write_config_sets_permissions(tmp_path: Path) -> None:
+    """Config file should be owner-only readable (0o600) on Unix."""
+    import os
+    import stat
+    config_path = tmp_path / "config.json"
+    write_config(config_path, {"test": True})
+    if os.name != "nt":
+        mode = stat.S_IMODE(config_path.stat().st_mode)
+        assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
 
 
 def test_ensure_config_exists_sanitizes_placeholder_values_in_accounts(tmp_path: Path) -> None:

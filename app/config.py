@@ -221,6 +221,19 @@ def load_config(config_path: str | Path) -> AppConfig:
     primary_account = accounts["primary"] if "primary" in accounts else next(iter(accounts.values()))
     primary_routing = routing[primary_account.id]
 
+    # Validate field formats
+    if config_quiet_start := _optional_string(raw, "quiet_hours_start"):
+        import re
+        if not re.match(r"^\d{1,2}:\d{2}$", config_quiet_start):
+            raise ConfigError(f"Invalid quiet_hours_start format: {config_quiet_start!r}. Expected HH:MM (e.g. '22:00')")
+    if config_quiet_end := _optional_string(raw, "quiet_hours_end"):
+        import re
+        if not re.match(r"^\d{1,2}:\d{2}$", config_quiet_end):
+            raise ConfigError(f"Invalid quiet_hours_end format: {config_quiet_end!r}. Expected HH:MM (e.g. '08:00')")
+    for hour in [int(h) for h in raw.get("briefing_times", [9])]:
+        if not (0 <= hour <= 23):
+            raise ConfigError(f"Invalid briefing time: {hour}. Must be 0-23.")
+
     return AppConfig(
         telegram_bot_token=primary_account.token,
         allowed_chat_ids=primary_account.allowed_chat_ids,

@@ -191,6 +191,19 @@ class AssistantRouter:
     def _initialize_runtime_components(self) -> None:
         assert self._config is not None
 
+        # Validate critical directories exist
+        if not self._config.agents_dir.exists():
+            raise RuntimeError(
+                f"Agents directory not found: {self._config.agents_dir}\n"
+                "Run 'assistant init' to set up the runtime, or check your config."
+            )
+        default_agent_dir = self._config.agents_dir / self._config.default_agent
+        if not default_agent_dir.exists():
+            raise RuntimeError(
+                f"Default agent '{self._config.default_agent}' not found at {default_agent_dir}\n"
+                "Run 'assistant manage create-agent {self._config.default_agent}' to create it."
+            )
+
         self._response_cache = ResponseCache(ttl_seconds=self._config.cache_ttl_seconds)
         self._cooldown = CooldownTracker(cooldown_seconds=self._config.cooldown_seconds_per_chat)
 
@@ -796,7 +809,7 @@ class AssistantRouter:
         except Exception as exc:
             self._runtime_state.mark_error(str(exc))
             LOGGER.exception("Context or model execution failed for account=%s agent=%s", account_id, active_agent)
-            reply = f"Runtime error: {exc}"
+            reply = f"Something went wrong processing your message. Check 'assistant doctor' for diagnostics.\n(Error: {type(exc).__name__}: {exc})"
             new_session_id = None
             self._hooks.emit_async("error", account_id=account_id, chat_id=message.chat_id,
                                    agent=active_agent, error=str(exc))
@@ -1273,7 +1286,7 @@ class AssistantRouter:
                 self._runtime_state.mark_error(str(exc))
                 LOGGER.exception("Streaming model call failed agent=%s iteration=%s", active_agent, iteration)
                 _update_message(f"Error: {exc}")
-                return f"Runtime error: {exc}", last_session_id
+                return f"Something went wrong processing your message. Check 'assistant doctor' for diagnostics.\n(Error: {type(exc).__name__}: {exc})", last_session_id
             finally:
                 self._runtime_state.mark_model_finished()
                 self._runtime_state.set_last_model_duration_ms(
