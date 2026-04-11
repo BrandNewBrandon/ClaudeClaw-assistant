@@ -60,11 +60,14 @@ git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\Clau
 | Command | Description |
 |---------|-------------|
 | `assistant chat [--agent <name>]` | Chat in the terminal |
-| `assistant ui [--port 18790]` | Open web dashboard |
+| `assistant dashboard [--open]` | Open web dashboard |
 | `assistant logs [-n 100] [--no-follow]` | Tail the runtime log |
 | `assistant mcp` | Start MCP stdio server |
 | `assistant pair [code]` | Approve a DM pairing request |
 | `assistant pair --list` | List pending pairing requests |
+| `assistant backup` | Create a backup archive |
+| `assistant backup-restore <file>` | Restore from backup |
+| `assistant backup-restore <file> --dry-run` | Preview restore |
 
 ---
 
@@ -77,6 +80,8 @@ git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\Clau
 | `/new` `/reset` | Start a fresh session |
 | `/compact` | Summarize and compress context |
 | `/transcript [n]` | Show last n messages (default 6) |
+| `/search-chat <query>` | Search conversation history |
+| `/export` | Export transcript as text |
 
 ### Agents
 
@@ -98,7 +103,7 @@ git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\Clau
 | `/memory` | Show relevant memory snippets |
 | `/consolidate [days]` | Merge daily notes into MEMORY.md |
 
-### Scheduling
+### Scheduling & Tasks
 
 | Command | Description |
 |---------|-------------|
@@ -108,16 +113,46 @@ git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\Clau
 | `/quiet [on\|off\|set HH:MM HH:MM]` | Quiet hours config |
 | `/briefing [now\|on\|off\|set\|add\|remove]` | Briefing config |
 
-### Info
+### Background Jobs
+
+| Command | Description |
+|---------|-------------|
+| `/bg <prompt>` | Run a prompt in the background |
+| `/every <interval> <prompt>` | Recurring background job (e.g., `/every 24h check PRs`) |
+| `/jobs` | List all background jobs |
+| `/job <id>` | Show job status and result |
+| `/job cancel <id>` | Cancel a job |
+| `/delegate <agent> <prompt>` | Delegate a task to another agent |
+
+### Messaging
+
+| Command | Description |
+|---------|-------------|
+| `/forward <target> <msg>` | Forward to another chat or surface |
+| `/search <query>` | Web search |
+
+### System
 
 | Command | Description |
 |---------|-------------|
 | `/status` | Runtime + agent health |
+| `/diagnostics` | Runtime metrics, thread health, error counts |
 | `/tools` | List available tools |
 | `/skills` | List installed skills |
 | `/hooks` | Show hook registry |
-| `/search <query>` | Web search |
+| `/monitors [on\|off]` | System monitor status / toggle |
 | `/help` | Show all commands |
+
+### Claude Code Skills
+
+| Command | Description |
+|---------|-------------|
+| `/cc-skills` | List available CC skills |
+| `/cc-skill <name>` | Show skill details |
+| `/cc-install <url>` | Install from GitHub (e.g., `owner/repo`) |
+| `/cc-uninstall <name>` | Remove installed skill |
+| `/cc-import <name>` | Enable a CC skill for your agents |
+| `/cc-remove <name>` | Disable a CC skill |
 
 ---
 
@@ -125,13 +160,14 @@ git clone https://github.com/BrandNewBrandon/ClaudeClaw-assistant.git $HOME\Clau
 
 ```
 agents/<name>/
-  agent.json         # Config (model, effort, display_name, description)
+  agent.json         # Config (model, effort, display_name, etc.)
   AGENT.md           # Personality / system prompt
   USER.md            # User context and preferences
   MEMORY.md          # Long-term consolidated notes
   TOOLS.md           # Tool integrations
   BOOTSTRAP.md       # First-run conversation script
   memory/            # Daily notes (YYYY-MM-DD.md)
+  documents/         # Saved PDF extractions
   sessions/          # Session transcripts
 ```
 
@@ -144,6 +180,11 @@ agents/<name>/
 | `model` | `"opus"` | Model override (sonnet/opus/haiku) |
 | `effort` | `"high"` | Effort override (low/medium/high) |
 | `provider` | `"claude-code"` | AI provider |
+| `working_dir` | `"~/Projects"` | Shell working directory |
+| `safe_commands` | `["git", "npm"]` | Commands that bypass approval |
+| `computer_use` | `false` | Enable screen control tools |
+| `computer_use_auto_approve` | `false` | Skip approval for actions |
+| `cc_skills` | `["tdd"]` | Imported Claude Code skills |
 
 ---
 
@@ -157,10 +198,12 @@ agents/<name>/
 | `model_provider` | `"claude-code"` | Must be "claude-code" |
 | `claude_model` | — | Global model override |
 | `claude_effort` | — | Global effort override |
-| `claude_timeout_seconds` | — | Claude execution timeout |
+| `claude_timeout_seconds` | `300` | Claude execution timeout (1-600) |
 | `max_prompt_chars` | `24000` | Prompt character limit |
 
 ### Accounts
+
+Supported platforms: `telegram`, `discord`, `slack`, `imessage`, `whatsapp`
 
 ```json
 {
@@ -185,19 +228,49 @@ agents/<name>/
 | Field | Default | Description |
 |-------|---------|-------------|
 | `cache_enabled` | `true` | Response cache |
-| `cache_ttl_seconds` | `300` | Cache expiry |
+| `cache_ttl_seconds` | `300` | Cache expiry (0-86400) |
+| `cooldown_seconds_per_chat` | `0.0` | Per-chat rate limit (0-300) |
 | `compaction_enabled` | `true` | Auto session compaction |
-| `compaction_token_budget` | `12000` | Token threshold |
+| `compaction_token_budget` | `12000` | Token threshold (1000-200000) |
 | `pairing_enabled` | `true` | DM pairing system |
 | `consolidation_enabled` | `true` | Daily note consolidation |
 | `consolidation_keep_days` | `3` | Days before consolidation |
-| `semantic_search_enabled` | `true` | Semantic memory search (requires fastembed) |
+| `consolidation_hour` | `2` | Hour to run (0-23) |
+| `semantic_search_enabled` | `true` | Semantic memory search |
+| `embedding_model` | `"BAAI/bge-small-en-v1.5"` | Embedding model for search |
 | `briefing_enabled` | `false` | Scheduled briefings |
-| `briefing_times` | `[9]` | Briefing hours (24h) |
+| `briefing_times` | `[9]` | Briefing hours (0-23) |
 | `quiet_hours_start` | — | Quiet start (HH:MM) |
 | `quiet_hours_end` | — | Quiet end (HH:MM) |
-| `dashboard_token` | `""` | Dashboard auth token |
-| `cooldown_seconds_per_chat` | `0.0` | Per-chat rate limit |
+| `dashboard_token` | (auto) | Dashboard auth token |
+| `auto_memory` | `false` | Auto-extract facts from conversations |
+| `session_reset_daily_hour` | — | Daily session reset hour (0-23) |
+| `session_idle_reset_minutes` | — | Idle reset timeout |
+
+---
+
+## Tools Available to Agents
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | DuckDuckGo search |
+| `web_fetch` | Fetch and extract page content |
+| `read_file` | Read local files |
+| `write_file` | Write local files |
+| `list_dir` | Directory listing |
+| `disk_usage` | Disk space stats |
+| `list_processes` | Running processes |
+| `run_command` | Shell execution (approval-gated) |
+| `screenshot` | Capture screen (computer_use) |
+| `mouse_click` | Click at coordinates (computer_use) |
+| `mouse_move` | Move cursor (computer_use) |
+| `keyboard_type` | Type text (computer_use) |
+| `keyboard_hotkey` | Key combos (computer_use) |
+| `scroll` | Scroll screen (computer_use) |
+| `open_url` | Open URL in browser |
+| `open_app` | Launch application |
+| `get_screen_size` | Screen resolution |
+| `get_mouse_position` | Cursor position |
 
 ---
 
@@ -209,25 +282,45 @@ agents/<name>/
 |---------|------|
 | Config | `~/Library/Application Support/assistant/config/config.json` |
 | Agents | `~/Library/Application Support/assistant/config/agents/` |
-| Data | `~/Library/Application Support/assistant/data/` |
 | State | `~/Library/Application Support/assistant/state/` |
 | Logs | `~/Library/Logs/assistant/runtime.log` |
-| PID file | `~/Library/Application Support/assistant/state/runtime.pid` |
-| Sessions | `~/Library/Application Support/assistant/state/sessions.json` |
-| Project | `~/ClaudeClaw/assistant/` |
+| CC Skills | `~/.assistant/cc-skills/` |
+| User Skills | `~/.assistant/skills/` |
 
 ### Windows
 
 | Purpose | Path |
 |---------|------|
-| Config | `%APPDATA%\assistant\config\config.json` |
+| Config | `%APPDATA%\assistant\config.json` |
 | Agents | `%APPDATA%\assistant\config\agents\` |
-| Data | `%APPDATA%\assistant\data\` |
-| State | `%APPDATA%\assistant\state\` |
-| Logs | `%APPDATA%\assistant\logs\runtime.log` |
-| Project | `%USERPROFILE%\ClaudeClaw\assistant\` |
+| State | `%LOCALAPPDATA%\assistant\state\` |
+| Logs | `%LOCALAPPDATA%\assistant\logs\runtime.log` |
 
 **Override all paths:** set `ASSISTANT_APP_ROOT` environment variable.
+
+---
+
+## Webhook API
+
+```bash
+curl -X POST http://localhost:18790/api/webhook \
+  -H "Authorization: Bearer YOUR_DASHBOARD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Deploy complete", "chat_id": "123", "agent": "main"}'
+```
+
+---
+
+## Optional Dependencies
+
+```bash
+pip install assistant-runtime[discord]       # Discord
+pip install assistant-runtime[slack]         # Slack
+pip install assistant-runtime[semantic]      # Semantic memory search
+pip install assistant-runtime[computer-use]  # Computer use tools
+pip install assistant-runtime[voice]         # Voice memo transcription
+pip install assistant-runtime[all]           # Everything
+```
 
 ---
 
@@ -236,27 +329,16 @@ agents/<name>/
 | Problem | Fix |
 |---------|-----|
 | No DM reply | `assistant pair --list` then `assistant pair <code>` |
-| Silent in group chat | Bot must be mentioned or patterns must match |
-| Runtime won't start | Check `assistant status` for stale PID, then `assistant stop` |
+| Runtime won't start | Check `assistant status`, then `assistant stop` |
 | Config errors | `assistant doctor --fix` |
-| Claude not found | Install Claude CLI: `npm install -g @anthropic-ai/claude-code` |
-| "Command line too long" (Windows) | Update to latest — fixed with stdin prompt passing |
-| Dashboard won't open | Check port 18790: `assistant ui --port 18791` |
-| Agent not responding | `assistant show <name>` — verify agent.json + AGENT.md exist |
-| Stale sessions | `/new` to reset, or `/compact` to free context |
-| Memory not working | `/consolidate` to merge daily notes |
-
----
-
-## Web Dashboard
-
-```
-assistant ui                    # Start at localhost:18790
-assistant ui --port 3000        # Custom port
-assistant ui --host 0.0.0.0    # Expose on network
-```
-
-Dashboard token (optional): set `dashboard_token` in config.json.
+| Claude not found | Install Claude CLI: `claude.ai/code` |
+| Dashboard won't open | Check port: `assistant dashboard --port 18791` |
+| Agent not responding | `assistant show <name>` — verify files exist |
+| Stale sessions | `/new` to reset, `/compact` to free context |
+| Voice not working | `pip install openai-whisper` |
+| Computer use missing | `pip install pyautogui Pillow` |
+| iMessage no messages | Grant Full Disk Access to Terminal |
+| WhatsApp offline | Check bridge server: `assistant doctor` |
 
 ---
 
@@ -267,13 +349,10 @@ Dashboard token (optional): set `dashboard_token` in config.json.
 - Config file exists and parses
 - Claude CLI is in PATH
 - Default agent directory exists
-- Agents and shared directories exist
-- All account tokens are present and unique
 - All routing entries point to real agents
-- Allowed chat IDs are configured
-
-`assistant doctor --fix` auto-repairs:
-
-- Creates missing agents directory
-- Scaffolds missing default agent
-- Creates missing shared directory
+- iMessage: macOS + Messages DB access
+- WhatsApp: bridge server reachability
+- pymupdf: PDF support available
+- pyautogui: computer use ready (if enabled)
+- fastembed: semantic search (if enabled)
+- Config field ranges (timeouts, hours, etc.)
