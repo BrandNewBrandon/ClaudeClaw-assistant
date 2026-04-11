@@ -25,6 +25,15 @@ It uses Claude (Anthropic's AI) as its brain and keeps its own memory between co
 14. [DM pairing](#dm-pairing)
 15. [Hooks](#hooks)
 16. [Troubleshooting](#troubleshooting)
+17. [Background jobs](#background-jobs)
+18. [Agent delegation](#agent-delegation)
+19. [System monitors](#system-monitors)
+20. [Computer use](#computer-use)
+21. [PDF documents](#pdf-documents)
+22. [Message forwarding](#message-forwarding)
+23. [Conversation search and export](#conversation-search-and-export)
+24. [iMessage setup](#imessage-setup)
+25. [WhatsApp setup](#whatsapp-setup)
 
 ---
 
@@ -32,7 +41,7 @@ It uses Claude (Anthropic's AI) as its brain and keeps its own memory between co
 
 ClaudeClaw is a background program that:
 
-- Connects to your Telegram (or Discord or Slack) account
+- Connects to your messaging apps (Telegram, Discord, Slack, iMessage, or WhatsApp)
 - Listens for messages from you
 - Sends your message to Claude for a reply
 - Sends the reply back to you
@@ -157,6 +166,8 @@ Choose your messaging platform:
 - `1` = Telegram (recommended)
 - `2` = Discord
 - `3` = Slack
+- `4` = iMessage (macOS only)
+- `5` = WhatsApp (requires bridge server)
 
 **Step 2 — Bot token**
 
@@ -341,6 +352,65 @@ Quiet hours prevent reminders from waking you up at night. Any reminder that fir
 
 The times use 24-hour format. Overnight windows (e.g. 22:00–08:00) work correctly. Your setting is saved to `config.json` and remembered after restarts.
 
+### Background jobs
+
+Run prompts in the background — the assistant works on them while you continue chatting.
+Results are delivered to your chat when complete.
+
+| Command | What it does |
+|---|---|
+| `/bg <prompt>` | Run a prompt in the background |
+| `/jobs` | List all background jobs and their status |
+| `/job <id>` | Show details and result of a specific job |
+| `/job cancel <id>` | Cancel a pending or running job |
+
+Background jobs have full tool access (web search, file operations, etc.) and conversation context.
+Up to 2 jobs can run simultaneously.
+
+### Agent delegation
+
+Send a task to a different agent without switching your active conversation.
+The delegated agent uses its own personality and memory to handle the request.
+
+| Command | What it does |
+|---|---|
+| `/delegate <agent> <prompt>` | Send a task to another agent |
+
+The result is delivered to your chat when the delegated agent finishes.
+This is useful for getting a second opinion or using a specialized agent for a specific task.
+
+### System monitors
+
+The assistant proactively monitors your system and alerts you when something needs attention.
+
+| Command | What it does |
+|---|---|
+| `/monitors` | Show active monitors and their status |
+| `/monitors on` | Enable system monitoring |
+| `/monitors off` | Disable system monitoring |
+
+Built-in monitors:
+- **Disk usage** — alerts when disk is over 90% full
+- **Process count** — alerts when process count is unusually high (>500)
+
+Monitors check every 5 minutes with a 1-hour cooldown between repeat alerts.
+
+### Message forwarding
+
+Send a message from your current chat to another chat or platform.
+
+| Command | What it does |
+|---|---|
+| `/forward <chat_id> <message>` | Forward to another chat on the same platform |
+| `/forward <platform>:<account>:<chat_id> <message>` | Forward to a specific platform and chat |
+
+### Conversation search and export
+
+| Command | What it does |
+|---|---|
+| `/search-chat <query>` | Search your conversation history for matching messages |
+| `/export` | Export your transcript as formatted text |
+
 ### Morning briefing
 
 The assistant can send you a proactive briefing at scheduled times each day — a warm greeting, any pending reminders, and a summary of yesterday's notes. It is off by default.
@@ -403,6 +473,11 @@ The assistant has access to the following tools. Use `/tools` in chat to list th
 | `disk_usage` | Show disk space (total/used/free) for a filesystem path |
 | `list_processes` | List running processes, optionally filtered by name |
 | `run_command` | Run a shell command (requires approval unless whitelisted) |
+| `screenshot` | Capture the screen (requires computer_use in agent.json) |
+| `mouse_click` | Click at screen coordinates (requires approval) |
+| `keyboard_type` | Type text via keyboard (requires approval) |
+| `open_url` | Open a URL in the default browser |
+| `open_app` | Open an application by name |
 
 `run_command` prompts for YES/NO approval before executing. You can whitelist trusted
 command prefixes per-agent in `agent.json` via the `safe_commands` field — those run
@@ -686,6 +761,171 @@ Each event is a dict with at least `{"event": "...", "timestamp": "..."}` plus e
 Type `/hooks` in chat to see which hook scripts are loaded and what events they listen for.
 
 An example hook file is included at `hooks/example_hook.py.disabled` — rename it to `.py` to enable it.
+
+---
+
+## PDF documents
+
+Drop a PDF file into your chat and ask questions about it. The assistant extracts
+the text and either includes it directly in the conversation (for short PDFs, 5 pages
+or fewer) or saves it to a file that the agent can reference.
+
+Requires `pymupdf`: it is installed by default. If missing, install with:
+```
+pip install pymupdf
+```
+
+---
+
+## Computer use
+
+The assistant can see your screen, click, type, and interact with applications.
+This is an opt-in feature — enable it per agent.
+
+### Enabling computer use
+
+Add to your agent's `agent.json`:
+
+```json
+{
+  "computer_use": true
+}
+```
+
+### Available tools
+
+| Tool | What it does |
+|---|---|
+| `screenshot` | Capture the current screen |
+| `mouse_click` | Click at screen coordinates |
+| `mouse_move` | Move the cursor |
+| `keyboard_type` | Type text |
+| `keyboard_hotkey` | Press keyboard shortcuts (e.g. cmd+c) |
+| `scroll` | Scroll up or down |
+| `open_url` | Open a URL in the default browser |
+| `open_app` | Open an application by name |
+| `get_screen_size` | Get screen resolution |
+| `get_mouse_position` | Get cursor position |
+
+### Safety
+
+- All action tools (click, type, scroll, open) require **user approval** by default
+- Read-only tools (screenshot, screen size, mouse position) run without approval
+- To skip approval for a trusted agent, add `"computer_use_auto_approve": true` to `agent.json`
+- pyautogui's failsafe is active — move your mouse to any screen corner to abort
+
+### Requirements
+
+Install the optional dependency:
+```
+pip install pyautogui Pillow
+```
+
+Or install with the extras group:
+```
+pip install assistant-runtime[computer-use]
+```
+
+Works on macOS, Windows, and Linux. Requires a display (will not work over SSH without a desktop).
+
+---
+
+## iMessage setup
+
+Connect the assistant to iMessage on macOS.
+
+### Requirements
+
+- macOS with Messages app signed in to iMessage
+- **Full Disk Access** granted to Terminal (or your IDE):
+  System Settings → Privacy & Security → Full Disk Access → add Terminal
+
+### Configuration
+
+During `assistant init` or `assistant configure`, choose platform **4 (iMessage)**.
+
+Or add manually to `config.json`:
+
+```json
+"accounts": {
+  "primary": {
+    "platform": "imessage",
+    "token": "",
+    "allowed_chat_ids": ["+15551234567", "user@icloud.com"]
+  }
+}
+```
+
+Chat IDs are phone numbers (with country code) or email addresses of the contacts
+you want the assistant to respond to.
+
+### How it works
+
+- Incoming messages are read from the local Messages database (`~/Library/Messages/chat.db`)
+- Outgoing messages are sent via AppleScript through the Messages app
+- No internet connection is needed for the iMessage adapter itself (messages go through Apple's servers as normal)
+- The database is read-only — the adapter never modifies your message history
+
+### Limitations
+
+- macOS only — will not work on Windows or Linux
+- Requires Full Disk Access permission
+- Group chats are not supported (individual conversations only)
+
+---
+
+## WhatsApp setup
+
+Connect the assistant to WhatsApp via a bridge server.
+
+### How it works
+
+The WhatsApp adapter does not connect to WhatsApp directly. Instead, it talks to a
+**bridge server** — a separate program that handles the WhatsApp protocol. This design
+keeps the adapter simple and lets you choose which bridge implementation to use.
+
+### Bridge server options
+
+You need to run a bridge server that exposes this HTTP API:
+
+- `GET /messages?since=<timestamp>` — returns new messages as JSON
+- `POST /send` — sends a message (body: `{"to": "+1555...", "text": "..."}`)
+
+Popular options:
+- **whatsapp-web.js** based APIs (Node.js)
+- **Baileys** (Node.js)
+- **whatsmeow** (Go)
+
+### Configuration
+
+During `assistant init` or `assistant configure`, choose platform **5 (WhatsApp)**.
+
+Or add manually to `config.json`:
+
+```json
+"accounts": {
+  "primary": {
+    "platform": "whatsapp",
+    "token": "your-bridge-api-key",
+    "allowed_chat_ids": ["+15551234567"],
+    "channel_config": {
+      "bridge_url": "http://localhost:3000"
+    }
+  }
+}
+```
+
+### Fields
+
+| Field | Required | What it is |
+|---|---|---|
+| `token` | Yes | API key for authenticating with your bridge server |
+| `bridge_url` | No | URL of your bridge server (default: `http://localhost:3000`) |
+| `allowed_chat_ids` | Yes | Phone numbers (with country code) to respond to |
+
+### Checking connectivity
+
+Run `assistant doctor` — it will test whether the bridge server is reachable.
 
 ---
 
