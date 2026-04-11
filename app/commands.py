@@ -589,6 +589,45 @@ class CommandHandler:
             except Exception as exc:
                 return (f"Forward failed: {exc}", None, False, None)
 
+        # ── /search-chat <query> ─────────────────────────────────────────────
+        if stripped == "/search-chat" or stripped.startswith("/search-chat "):
+            parts = stripped.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                return ("Usage: /search-chat <query>", None, False, None)
+            query = parts[1].strip()
+            if self._memory_store is None or chat_id is None:
+                return ("Transcript unavailable.", None, False, None)
+            results = self._memory_store.search_transcript(
+                surface, chat_id, query,
+                account_id=account_id or "primary",
+                agent_name=active_agent,
+                limit=10,
+            )
+            if not results:
+                return (f"No matches for \"{query}\".", None, False, None)
+            lines = [f"Search results for \"{query}\" ({len(results)} match{'es' if len(results) != 1 else ''}):"]
+            for entry in results:
+                direction = "You" if entry.direction == "in" else "Assistant"
+                lines.append(f"[{entry.timestamp[:16]}] {direction}: {entry.message_text[:200]}")
+            return ("\n".join(lines), None, False, None)
+
+        # ── /export ──────────────────────────────────────────────────────────
+        if stripped == "/export":
+            if self._memory_store is None or chat_id is None:
+                return ("Transcript unavailable.", None, False, None)
+            entries = self._memory_store.read_recent_transcript(
+                surface, chat_id, limit=200,
+                account_id=account_id or "primary",
+                agent_name=active_agent,
+            )
+            if not entries:
+                return ("No transcript entries to export.", None, False, None)
+            lines = [f"Transcript export ({len(entries)} entries):"]
+            for entry in entries:
+                direction = "You" if entry.direction == "in" else "Assistant"
+                lines.append(f"[{entry.timestamp[:16]}] {direction}: {entry.message_text}")
+            return ("\n".join(lines), None, False, None)
+
         # ── /help ─────────────────────────────────────────────────────────────
         if stripped == "/help":
             skill_commands: list[str] = []
@@ -609,6 +648,8 @@ class CommandHandler:
                     "/tools — list available tools",
                     "/skills — list installed skills",
                     "/transcript [n] — show last n transcript entries",
+                    "/search-chat <query> — search conversation history",
+                    "/export — export transcript as text",
                     "/search <query> — web search",
                     "/remind <time> <message> — set a reminder (e.g. /remind 10m check oven)",
                     "/tasks — list pending tasks",
