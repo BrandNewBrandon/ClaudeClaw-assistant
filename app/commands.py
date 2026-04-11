@@ -559,6 +559,36 @@ class CommandHandler:
                 None,
             )
 
+        # ── /forward <target> <message> ──────────────────────────────────────
+        if stripped.startswith("/forward "):
+            rest = stripped.removeprefix("/forward ").strip()
+            if not rest:
+                return ("Usage: /forward <target> <message>\nTarget: chat_id (same surface) or surface:account:chat_id\nExample: /forward 99999 Hello", None, False, None)
+            parts = rest.split(maxsplit=1)
+            if len(parts) < 2:
+                return ("Usage: /forward <target> <message>\nTarget: chat_id (same surface) or surface:account:chat_id", None, False, None)
+            target, message = parts[0], parts[1]
+            if self._scheduler is None:
+                return ("Scheduler not available.", None, False, None)
+
+            # Parse target: full format "surface:account_id:chat_id" or short "chat_id"
+            if target.count(":") >= 2:
+                target_parts = target.split(":", 2)
+                surface_key = f"{target_parts[0]}:{target_parts[1]}"
+                target_chat_id = target_parts[2]
+            else:
+                surface_key = surface
+                target_chat_id = target
+
+            from .scheduler import SchedulerError
+            try:
+                self._scheduler.send_to(surface_key, target_chat_id, message)
+                return (f"Forwarded to {target_chat_id}.", None, False, None)
+            except SchedulerError as exc:
+                return (f"Forward failed: {exc}", None, False, None)
+            except Exception as exc:
+                return (f"Forward failed: {exc}", None, False, None)
+
         # ── /help ─────────────────────────────────────────────────────────────
         if stripped == "/help":
             skill_commands: list[str] = []
@@ -583,6 +613,7 @@ class CommandHandler:
                     "/remind <time> <message> — set a reminder (e.g. /remind 10m check oven)",
                     "/tasks — list pending tasks",
                     "/cancel <id> — cancel a task",
+                    "/forward <target> <message> — forward message to another chat",
                     "/quiet — show quiet hours status",
                     "/quiet set HH:MM HH:MM — set quiet hours (e.g. /quiet set 22:00 08:00)",
                     "/quiet on / off — enable or disable quiet hours",
