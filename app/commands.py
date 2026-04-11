@@ -735,6 +735,22 @@ class CommandHandler:
                 return (f"Monitors: {status}. No monitors registered.", None, False, None)
             return (f"Monitors: {status}\nActive: {', '.join(names)}", None, False, None)
 
+        # ── /diagnostics ─────────────────────────────────────────────────────
+        if stripped == "/diagnostics":
+            diag = runtime_state.get_diagnostics()
+            lines = ["Runtime diagnostics:"]
+            for key, value in diag.items():
+                if key == "active_threads":
+                    lines.append(f"  Threads:")
+                    if value:
+                        for tname, tstatus in sorted(value.items()):
+                            lines.append(f"    {tname}: {tstatus}")
+                    else:
+                        lines.append(f"    (none tracked)")
+                else:
+                    lines.append(f"  {key}: {value}")
+            return ("\n".join(lines), None, False, None)
+
         # ── /help ─────────────────────────────────────────────────────────────
         if stripped == "/help":
             skill_commands: list[str] = []
@@ -777,6 +793,7 @@ class CommandHandler:
                     "/delegate <agent> <prompt> — delegate a task to another agent",
                     "/monitors — show system monitor status",
                     "/monitors on / off — enable or disable monitors",
+                    "/diagnostics — show runtime diagnostics and thread health",
                     "/consolidate [days] — consolidate daily notes into long-term memory",
                     "/remember <text> — save to daily notes",
                     "/note <text> — alias for /remember",
