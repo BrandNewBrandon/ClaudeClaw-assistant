@@ -108,10 +108,15 @@ def restore_backup(archive_path: Path, *, dry_run: bool = False) -> list[str]:
 
             if not dry_run:
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                # Extract file
                 member_file = tar.extractfile(member)
                 if member_file is not None:
-                    dest.write_bytes(member_file.read())
+                    try:
+                        dest.write_bytes(member_file.read())
+                    except OSError as exc:
+                        raise RuntimeError(
+                            f"Failed to restore {dest}: {exc}. "
+                            "Check disk space and permissions."
+                        ) from exc
 
     return restored
 

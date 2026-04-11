@@ -569,6 +569,12 @@ class AssistantRouter:
             )
             return
         self._last_seen_message_ids[last_seen_key] = message.message_id
+        # Prevent unbounded growth
+        if len(self._last_seen_message_ids) > 10000:
+            # Remove oldest half
+            keys = list(self._last_seen_message_ids.keys())
+            for k in keys[:5000]:
+                del self._last_seen_message_ids[k]
 
         active_agent, routing_source = self._resolve_agent_for_chat(message.chat_id, account_id=account_id)
         agent_config = self._load_agent_config(active_agent)

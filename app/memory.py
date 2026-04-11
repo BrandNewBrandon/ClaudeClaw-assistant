@@ -203,6 +203,7 @@ class MemoryStore:
             try:
                 raw = json.loads(line)
             except json.JSONDecodeError:
+                LOGGER.warning("Skipping malformed transcript entry in %s", path)
                 continue
             entry = TranscriptEntry(
                 timestamp=str(raw.get("timestamp", "")),
@@ -235,7 +236,11 @@ class MemoryStore:
         for line in lines[-limit:]:
             if not line.strip():
                 continue
-            raw = json.loads(line)
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                LOGGER.warning("Skipping malformed transcript entry in %s", path)
+                continue
             entries.append(
                 TranscriptEntry(
                     timestamp=str(raw.get("timestamp", "")),
@@ -270,7 +275,11 @@ class MemoryStore:
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            raw = json.loads(line)
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                LOGGER.warning("Skipping malformed transcript entry in %s", path)
+                continue
             text = str(raw.get("message_text", ""))
             if query_lower in text.lower():
                 matches.append(

@@ -569,11 +569,14 @@ class CommandHandler:
             )
 
         # ── /forward <target> <message> ──────────────────────────────────────
-        if stripped.startswith("/forward "):
-            rest = stripped.removeprefix("/forward ").strip()
+        if stripped == "/forward" or stripped.startswith("/forward "):
+            rest = stripped.removeprefix("/forward").strip()
             if not rest:
                 return ("Usage: /forward <target> <message>\nTarget: chat_id (same surface) or surface:account:chat_id\nExample: /forward 99999 Hello", None, False, None)
             parts = rest.split(maxsplit=1)
+            target = parts[0].strip() if parts else ""
+            if not target:
+                return ("Usage: /forward <target> <message>", None, False, None)
             if len(parts) < 2:
                 return ("Usage: /forward <target> <message>\nTarget: chat_id (same surface) or surface:account:chat_id", None, False, None)
             target, message = parts[0], parts[1]
@@ -638,7 +641,7 @@ class CommandHandler:
             return ("\n".join(lines), None, False, None)
 
         # ── /bg <prompt> ─────────────────────────────────────────────────────
-        if stripped.startswith("/bg "):
+        if stripped == "/bg" or stripped.startswith("/bg "):
             prompt = stripped.removeprefix("/bg ").strip()
             if not prompt:
                 return ("Usage: /bg <prompt>", None, False, None)
@@ -698,9 +701,14 @@ class CommandHandler:
             return ("\n".join(lines), None, False, None)
 
         # ── /delegate <agent> <prompt> ───────────────────────────────────────
-        if stripped.startswith("/delegate "):
-            rest = stripped.removeprefix("/delegate ").strip()
+        if stripped == "/delegate" or stripped.startswith("/delegate "):
+            rest = stripped.removeprefix("/delegate").strip()
+            if not rest:
+                return ("Usage: /delegate <agent> <prompt>", None, False, None)
             parts = rest.split(maxsplit=1)
+            target_agent = parts[0].strip() if parts else ""
+            if not target_agent:
+                return ("Usage: /delegate <agent> <prompt>", None, False, None)
             if len(parts) < 2:
                 return ("Usage: /delegate <agent> <prompt>", None, False, None)
             target_agent, prompt = parts[0], parts[1]

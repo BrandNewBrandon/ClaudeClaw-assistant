@@ -27,18 +27,26 @@ def rotate_transcript(path: Path) -> bool:
     if len(lines) <= MAX_LINES:
         return False
 
-    # Archive the full file
+    # Archive old entries
+    old_entries = "\n".join(lines[:-KEEP_LINES]) + "\n"
     archive_path = path.with_suffix(".archive.jsonl")
-    if archive_path.exists():
-        # Append to existing archive
-        with archive_path.open("a", encoding="utf-8") as f:
-            f.write("\n".join(lines[:-KEEP_LINES]) + "\n")
-    else:
-        # Create new archive with old entries
-        archive_path.write_text("\n".join(lines[:-KEEP_LINES]) + "\n", encoding="utf-8")
 
-    # Keep only recent entries
-    path.write_text("\n".join(lines[-KEEP_LINES:]) + "\n", encoding="utf-8")
+    try:
+        if archive_path.exists():
+            with archive_path.open("a", encoding="utf-8") as f:
+                f.write(old_entries)
+        else:
+            archive_path.write_text(old_entries, encoding="utf-8")
+    except OSError as exc:
+        LOGGER.error("Failed to write archive %s: %s — skipping rotation", archive_path, exc)
+        return False
+
+    # Only truncate original AFTER archive write succeeded
+    try:
+        path.write_text("\n".join(lines[-KEEP_LINES:]) + "\n", encoding="utf-8")
+    except OSError as exc:
+        LOGGER.error("Failed to truncate %s after archiving: %s", path, exc)
+        return False
 
     LOGGER.info("Rotated transcript %s: %d → %d lines (%d archived)",
                 path.name, len(lines), KEEP_LINES, len(lines) - KEEP_LINES)
