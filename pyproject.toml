@@ -18,7 +18,8 @@ discord       = ["discord.py>=2.0"]
 slack         = ["slack-sdk>=3.0"]
 semantic      = ["fastembed>=0.4", "numpy>=1.26"]
 computer-use  = ["pyautogui>=0.9", "Pillow>=10.0"]
-all           = ["discord.py>=2.0", "slack-sdk>=3.0", "fastembed>=0.4", "numpy>=1.26", "pyautogui>=0.9", "Pillow>=10.0"]
+voice         = ["openai-whisper>=20230918"]
+all           = ["discord.py>=2.0", "slack-sdk>=3.0", "fastembed>=0.4", "numpy>=1.26", "pyautogui>=0.9", "Pillow>=10.0", "openai-whisper>=20230918"]
 
 [project.scripts]
 assistant = "app.assistant_cli:main"

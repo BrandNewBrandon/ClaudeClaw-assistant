@@ -28,6 +28,7 @@ class ChannelMessage:
     image_path: str | None = None
     document_path: str | None = None
     document_name: str | None = None
+    voice_path: str | None = None
 
 
 @dataclass(frozen=True)

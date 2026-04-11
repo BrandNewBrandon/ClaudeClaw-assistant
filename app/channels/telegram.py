@@ -57,6 +57,7 @@ class TelegramChannel(BaseChannel):
                         image_path=update.image_path,
                         document_path=update.document_path,
                         document_name=update.document_name,
+                        voice_path=update.voice_path,
                     )
                 )
         return results

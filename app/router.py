@@ -754,6 +754,7 @@ class AssistantRouter:
         image_path = message.image_path
         document_path = getattr(message, "document_path", None)
         document_name = getattr(message, "document_name", None)
+        voice_path = getattr(message, "voice_path", None)
         already_sent = False
         typing_stop: threading.Event | None = None
         typing_thread: threading.Thread | None = None
@@ -832,6 +833,7 @@ class AssistantRouter:
                 image_path=image_path,
                 document_path=document_path,
                 document_name=document_name,
+                voice_path=voice_path,
                 channel=channel,
                 compaction_summary=compaction_summary,
             )
@@ -862,6 +864,11 @@ class AssistantRouter:
             if document_path:
                 try:
                     Path(document_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if voice_path:
+                try:
+                    Path(voice_path).unlink(missing_ok=True)
                 except OSError:
                     pass
 
@@ -918,6 +925,7 @@ class AssistantRouter:
         image_path: str | None = None,
         document_path: str | None = None,
         document_name: str | None = None,
+        voice_path: str | None = None,
         channel: "BaseChannel | None" = None,
         compaction_summary: str | None = None,
     ) -> tuple[str, str | None, bool]:
@@ -969,6 +977,15 @@ class AssistantRouter:
                     message_text
                     + f"\n\n[PDF document error: {exc}]"
                 ).lstrip()
+
+        # If a voice message was attached, transcribe it
+        if voice_path:
+            from .voice_utils import transcribe as _transcribe_voice
+            transcription = _transcribe_voice(Path(voice_path))
+            message_text = (
+                message_text
+                + f"\n\n[Voice memo transcription]: {transcription}"
+            ).lstrip()
 
         # Determine whether we can stream to this channel
         can_stream = (

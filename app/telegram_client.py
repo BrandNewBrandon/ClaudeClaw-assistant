@@ -27,6 +27,7 @@ class TelegramMessage:
     image_path: str | None = None  # temp file path if a photo was attached
     document_path: str | None = None  # temp file path if a PDF was attached
     document_name: str | None = None  # original filename
+    voice_path: str | None = None  # temp file path if a voice message was attached
 
 
 @dataclass(frozen=True)
@@ -90,8 +91,10 @@ class TelegramClient:
             caption = message.get("caption", "")  # text on photo messages
             document = message.get("document")  # present when a file is sent
 
-            # Skip messages that have neither text nor a photo nor a document
-            if not isinstance(text, str) and not photo_sizes and not document:
+            voice_note = message.get("voice") or message.get("audio")
+
+            # Skip messages that have neither text nor a photo nor a document nor a voice note
+            if not isinstance(text, str) and not photo_sizes and not document and not voice_note:
                 continue
 
             # For photo messages use the caption as the user's text
@@ -120,6 +123,16 @@ class TelegramClient:
                     import logging
                     logging.getLogger(__name__).warning("Failed to download Telegram document: %s", exc)
 
+            # Download voice message if one is attached
+            voice_path: str | None = None
+            if voice_note:
+                try:
+                    voice_file_id = voice_note["file_id"]
+                    voice_path = self._download_document(voice_file_id)
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning("Failed to download voice message: %s", exc)
+
             results.append(
                 TelegramMessage(
                     update_id=int(item["update_id"]),
@@ -130,6 +143,7 @@ class TelegramClient:
                     image_path=image_path,
                     document_path=document_path,
                     document_name=document_name,
+                    voice_path=voice_path,
                 )
             )
 
