@@ -987,6 +987,13 @@ class AssistantRouter:
             _gated_run_command,
         )
 
+        # Register computer use tools if agent has them enabled
+        if _agent_cfg.computer_use:
+            from .computer_use import is_available as _cu_available, register_computer_use_tools
+            if _cu_available():
+                register_computer_use_tools(tool_registry)
+                LOGGER.info("Computer use tools enabled for agent=%s", active_agent)
+
         tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
         skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
         tool_results: list[str] = []
@@ -1137,6 +1144,12 @@ class AssistantRouter:
             ToolSpec("run_command", "Run a shell command and return its output.", {"command": "shell command string"}),
             _gated_run_command,
         )
+
+        # Register computer use tools if agent has them enabled
+        if _agent_cfg.computer_use:
+            from .computer_use import is_available as _cu_available, register_computer_use_tools
+            if _cu_available():
+                register_computer_use_tools(tool_registry)
 
         tool_loop = ToolLoop(tool_registry, max_tool_calls=3)
         skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""

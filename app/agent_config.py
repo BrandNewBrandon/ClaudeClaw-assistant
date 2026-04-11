@@ -19,6 +19,7 @@ class AgentConfig:
     effort: str | None = None
     safe_commands: tuple[str, ...] = ()
     working_dir: str | None = None
+    computer_use: bool = False
 
 
 def _optional_string(data: dict[str, Any], key: str) -> str | None:
@@ -68,4 +69,5 @@ def load_agent_config(agent_dir: Path) -> AgentConfig:
         effort=_optional_string(raw, "effort"),
         safe_commands=tuple(_optional_string_list(raw, "safe_commands")),
         working_dir=_optional_string(raw, "working_dir"),
+        computer_use=bool(raw.get("computer_use", False)),
     )
