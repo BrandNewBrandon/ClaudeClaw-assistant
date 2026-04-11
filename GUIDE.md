@@ -339,6 +339,7 @@ in the chat with your bot. They start with a `/`.
 | `/remind <time> <message>` | Sets a reminder. Time can be `10m`, `2h`, `1d`, or a date |
 | `/tasks` | Lists all your pending scheduled tasks |
 | `/cancel <id>` | Cancels a task by its ID (use `/tasks` to find the ID) |
+| `/every <interval> <prompt>` | Run a recurring background job (e.g. `/every 24h check PRs`) |
 
 **Reminder time format examples:**
 - `/remind 30m take a break` — reminds you in 30 minutes
@@ -372,6 +373,24 @@ Results are delivered to your chat when complete.
 
 Background jobs have full tool access (web search, file operations, etc.) and conversation context.
 Up to 2 jobs can run simultaneously.
+
+### Recurring jobs
+
+Set up jobs that repeat automatically on an interval.
+
+| Command | What it does |
+|---|---|
+| `/every <interval> <prompt>` | Create a recurring background job |
+
+Interval formats: `1h`, `6h`, `12h`, `24h`, `2d`, `7d`, or any `Nh`/`Nd` combination.
+
+Example:
+```
+/every 24h check my github notifications and summarize
+/every 7d review my weekly goals
+```
+
+Recurring jobs appear in `/jobs` with an interval label. Cancel with `/job cancel <id>`.
 
 ### Agent delegation
 
@@ -966,6 +985,78 @@ Or add manually to `config.json`:
 ### Checking connectivity
 
 Run `assistant doctor` — it will test whether the bridge server is reachable.
+
+---
+
+---
+
+## Webhook API
+
+External services can trigger the assistant via HTTP.
+
+**Endpoint:** `POST http://localhost:18790/api/webhook`
+
+**Headers:** `Authorization: Bearer <dashboard_token>`, `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "text": "Deploy complete — run post-deploy checks",
+  "chat_id": "your-chat-id",
+  "agent": "main",
+  "account_id": "primary",
+  "surface": "telegram:primary"
+}
+```
+
+The webhook creates a background job. Results are delivered to the specified chat.
+
+Use cases:
+- GitHub webhooks (PR merged → notify assistant)
+- CI/CD notifications
+- IFTTT / Zapier automations
+- Calendar event triggers
+
+---
+
+## Voice memos
+
+Send a voice message in Telegram and the assistant transcribes it automatically using OpenAI Whisper.
+
+The transcription is prepended as `[Voice memo transcription]: ...` and processed like a normal text message.
+
+### Requirements
+
+Install the optional dependency:
+```
+pip install openai-whisper
+```
+
+Or: `pip install assistant-runtime[voice]`
+
+If Whisper is not installed, voice messages are acknowledged but not transcribed.
+
+---
+
+## Smart memory
+
+When enabled, the assistant automatically extracts memorable facts from your conversations — preferences, projects, names, goals — and saves them to daily notes without you needing to say `/remember`.
+
+### Enabling
+
+Add to `config.json`:
+```json
+"auto_memory": true
+```
+
+### How it works
+
+After each exchange, a lightweight background call asks Claude to identify anything worth remembering. If facts are found, they're appended to the agent's daily notes. If nothing notable was said, nothing is saved.
+
+- Runs asynchronously — never slows down your conversation
+- Uses low effort to minimize cost
+- Extremely selective — only saves genuinely useful facts
+- Appends to existing daily notes (same format as `/remember`)
 
 ---
 

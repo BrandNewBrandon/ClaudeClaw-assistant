@@ -40,6 +40,22 @@ A personal AI assistant runtime powered by Claude Code. Connects to your messagi
 - Full tool access in background (web search, files, etc.)
 - Up to 2 concurrent jobs with conversation context
 - `/jobs`, `/job <id>`, `/job cancel <id>`
+- `/every <interval> <prompt>` — recurring jobs on a schedule (e.g. `/every 24h check PRs`)
+
+### Webhook API
+- `POST /api/webhook` — external services trigger the assistant via HTTP
+- GitHub webhooks, CI/CD notifications, IFTTT/Zapier automations, calendar triggers
+- Results delivered to the specified chat
+
+### Voice Memos
+- Send a voice message in Telegram — transcribed automatically via OpenAI Whisper
+- Transcription prepended as `[Voice memo transcription]: ...` and processed as normal text
+- Graceful fallback if Whisper is not installed
+
+### Smart Memory
+- `auto_memory: true` in config enables automatic fact extraction from conversations
+- Saves preferences, projects, names, and goals to daily notes without `/remember`
+- Runs asynchronously, uses low effort — never slows down conversation
 
 ### Memory & Context
 - Persistent transcripts (JSONL per chat)
@@ -139,6 +155,7 @@ assistant backup         # Create backup
 | `/agents` | List agents |
 | `/agent switch <name>` | Switch agent |
 | `/bg <prompt>` | Background job |
+| `/every <interval> <prompt>` | Recurring background job |
 | `/delegate <agent> <prompt>` | Delegate to agent |
 | `/remind <time> <msg>` | Set reminder |
 | `/search-chat <query>` | Search history |
@@ -164,6 +181,8 @@ assistant backup         # Create backup
   "cc_skills": ["tdd", "brainstorming"]
 }
 ```
+
+Set `"auto_memory": true` in `config.json` to enable automatic memory extraction from conversations.
 
 ## Config Paths
 
@@ -192,5 +211,6 @@ pip install assistant-runtime[discord]       # Discord support
 pip install assistant-runtime[slack]         # Slack support
 pip install assistant-runtime[semantic]      # Semantic memory search
 pip install assistant-runtime[computer-use]  # Computer use tools
+pip install assistant-runtime[voice]         # Voice memo transcription
 pip install assistant-runtime[all]           # Everything
 ```
