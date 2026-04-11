@@ -50,6 +50,9 @@ class JobRunner:
     def start(self) -> None:
         if self._thread is not None:
             return
+        recovered = self._store.recover_stale_jobs()
+        if recovered:
+            LOGGER.info("Recovered %d stale job(s) from prior crash", recovered)
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, name="job-runner", daemon=True)
         self._thread.start()

@@ -75,3 +75,33 @@ def test_running_count(tmp_path: Path) -> None:
     assert store.running_count() == 0
     store.claim_next_pending()
     assert store.running_count() == 1
+
+
+def test_recover_stale_jobs(tmp_path: Path) -> None:
+    store = JobStore(tmp_path / "jobs.db")
+    job_id = store.create_job(
+        chat_id="c1", account_id="primary", surface="s", agent="main", prompt="stale",
+    )
+    store.claim_next_pending()  # Sets status to 'running'
+    assert store.running_count() == 1
+
+    recovered = store.recover_stale_jobs()
+    assert recovered == 1
+    assert store.running_count() == 0
+
+    job = store.get_job(job_id)
+    assert job is not None
+    assert job.status == "failed"
+    assert "Runtime restarted" in (job.error or "")
+
+
+def test_recover_stale_jobs_skips_non_running(tmp_path: Path) -> None:
+    store = JobStore(tmp_path / "jobs.db")
+    # Create a pending job and a completed job — neither should be recovered
+    j1 = store.create_job(chat_id="c1", account_id="primary", surface="s", agent="main", prompt="pending")
+    j2 = store.create_job(chat_id="c1", account_id="primary", surface="s", agent="main", prompt="to complete")
+    store.claim_next_pending()  # Claims j1, sets to running
+    store.complete_job(j1, result="done")  # Now j1 is completed
+    # j2 is still pending
+    recovered = store.recover_stale_jobs()
+    assert recovered == 0  # No running jobs to recover

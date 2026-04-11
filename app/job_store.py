@@ -150,6 +150,19 @@ class JobStore:
                 row = conn.execute("SELECT COUNT(*) as cnt FROM jobs WHERE status = 'running'").fetchone()
         return int(row["cnt"])
 
+    def recover_stale_jobs(self) -> int:
+        """Mark any 'running' jobs as failed (orphaned from a prior crash). Returns count."""
+        now = datetime.now(tz=timezone.utc).isoformat()
+        with self._lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    "UPDATE jobs SET status = 'failed', error = 'Runtime restarted while job was running', completed_at = ? "
+                    "WHERE status = 'running'",
+                    (now,),
+                )
+                conn.commit()
+                return cursor.rowcount
+
     @staticmethod
     def _parse_dt(value: str | None) -> datetime | None:
         if not value:
