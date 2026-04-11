@@ -241,6 +241,13 @@ class Scheduler:
     def register_sender(self, surface: str, callback: SendCallback) -> None:
         self._send_callbacks[surface] = callback
 
+    def send_to(self, surface: str, chat_id: str, text: str) -> None:
+        """Send a message to a specific surface/chat via registered callback."""
+        callback = self._send_callbacks.get(surface)
+        if callback is None:
+            raise SchedulerError(f"No sender registered for surface: {surface!r}")
+        callback(surface, chat_id, text)
+
     def add_reminder(
         self,
         *,
