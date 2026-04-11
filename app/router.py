@@ -1005,8 +1005,9 @@ class AssistantRouter:
                         except Exception:
                             pass
                     return msg
-                register_computer_use_tools(tool_registry, approval_fn=_cu_approval)
-                LOGGER.info("Computer use tools enabled for agent=%s", active_agent)
+                _cu_fn = None if _agent_cfg.computer_use_auto_approve else _cu_approval
+                register_computer_use_tools(tool_registry, approval_fn=_cu_fn)
+                LOGGER.info("Computer use tools enabled for agent=%s auto_approve=%s", active_agent, _agent_cfg.computer_use_auto_approve)
 
         _max_tools = 10 if _agent_cfg.computer_use else 3
         tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
@@ -1178,7 +1179,8 @@ class AssistantRouter:
                         except Exception:
                             pass
                     return msg
-                register_computer_use_tools(tool_registry, approval_fn=_cu_approval_stream)
+                _cu_fn_s = None if _agent_cfg.computer_use_auto_approve else _cu_approval_stream
+                register_computer_use_tools(tool_registry, approval_fn=_cu_fn_s)
 
         _max_tools = 10 if _agent_cfg.computer_use else 3
         tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
