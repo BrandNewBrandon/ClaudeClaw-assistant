@@ -429,6 +429,42 @@ Config values:
   app_token   = App-Level Token       (xapp-...)
   chat ID     = Channel ID (enable Developer Mode in Slack, right-click channel)
 """,
+    "imessage": """\
+iMessage setup (macOS only):
+
+Requirements:
+  1. macOS with the Messages app signed in to iMessage
+  2. Full Disk Access granted to Terminal (or your IDE):
+     System Settings → Privacy & Security → Full Disk Access → add Terminal
+  3. No bot token needed — iMessage works locally via the Messages database
+
+Chat IDs:
+  Chat IDs are phone numbers (e.g. +15551234567) or email addresses
+  (e.g. user@icloud.com) of the contacts you want the assistant to
+  respond to.
+
+Note: iMessage is macOS only. It will not work on Windows or Linux.
+""",
+    "whatsapp": """\
+WhatsApp setup (requires a bridge server):
+
+The WhatsApp adapter connects to a local bridge server that handles
+the actual WhatsApp protocol. You can use any bridge that implements
+a simple HTTP API:
+
+  GET  /messages?since=<timestamp>  → incoming messages (JSON)
+  POST /send                        → send a message
+
+Popular bridge options:
+  • whatsapp-web.js (Node.js) — github.com/nicolomaioli/wweb-api
+  • Baileys (Node.js)         — github.com/WhiskeySockets/Baileys
+  • whatsmeow (Go)            — github.com/tulir/whatsmeow
+
+Config values:
+  token       = API key for your bridge server (can be any string)
+  bridge_url  = URL of your bridge server (default: http://localhost:3000)
+  chat ID     = Phone numbers with country code (e.g. +15551234567)
+""",
 }
 
 
@@ -532,22 +568,29 @@ def _run_init(project_root: Path) -> int:
     _info("  1) Telegram  (recommended, easiest to set up)")
     _info("  2) Discord")
     _info("  3) Slack")
+    _info("  4) iMessage  (macOS only)")
+    _info("  5) WhatsApp  (requires bridge server)")
     print()
 
-    platform_map = {"1": "telegram", "2": "discord", "3": "slack"}
+    platform_map = {"1": "telegram", "2": "discord", "3": "slack", "4": "imessage", "5": "whatsapp"}
     while True:
-        choice = input("  Enter 1, 2, or 3 [1]: ").strip() or "1"
+        choice = input("  Enter 1-5 [1]: ").strip() or "1"
         if choice in platform_map:
             platform = platform_map[choice]
             break
-        print("  Please enter 1, 2, or 3.")
+        print("  Please enter 1, 2, 3, 4, or 5.")
 
     # ── Step 3: Token + chat ID ───────────────────────────────────────────────
     _section(f"Step 3 of 5 — {platform.capitalize()} Token & Chat ID")
     print()
     _info(_PLATFORM_INSTRUCTIONS[platform])
 
-    token = _prompt_required(f"  {platform.capitalize()} bot token", secret=True)
+    # iMessage doesn't need a token (local system)
+    if platform == "imessage":
+        token = ""
+        _info("  No token needed — iMessage works locally.")
+    else:
+        token = _prompt_required(f"  {platform.capitalize()} bot token", secret=True)
     print()
 
     chat_ids: list[str] = []
@@ -562,7 +605,14 @@ def _run_init(project_root: Path) -> int:
                 chat_ids = [detected]
 
     if not chat_ids:
-        chat_ids_raw = _prompt_required("  Allowed chat IDs (comma-separated)")
+        if platform == "imessage":
+            _info("  Enter phone numbers or email addresses of contacts to respond to.")
+            chat_ids_raw = _prompt_required("  Allowed contacts (comma-separated, e.g. +15551234567)")
+        elif platform == "whatsapp":
+            _info("  Enter phone numbers with country code.")
+            chat_ids_raw = _prompt_required("  Allowed contacts (comma-separated, e.g. +15551234567)")
+        else:
+            chat_ids_raw = _prompt_required("  Allowed chat IDs (comma-separated)")
         chat_ids = [c.strip() for c in chat_ids_raw.split(",") if c.strip()]
 
     channel_config: dict[str, str] = {}
@@ -570,6 +620,10 @@ def _run_init(project_root: Path) -> int:
         print()
         app_token = _prompt_required("  Slack App-Level Token (xapp-...)", secret=True)
         channel_config["app_token"] = app_token
+    elif platform == "whatsapp":
+        print()
+        bridge_url = input("  WhatsApp bridge URL [http://localhost:3000]: ").strip() or "http://localhost:3000"
+        channel_config["bridge_url"] = bridge_url
 
     # ── Step 4: Agent ─────────────────────────────────────────────────────────
     _section("Step 4 of 5 — Default Agent")
@@ -721,9 +775,9 @@ def _run_configure(project_root: Path) -> int:
 
     # Platform
     _info(f"Current platform: {current_platform}")
-    _info("Platforms: telegram, discord, slack")
+    _info("Platforms: telegram, discord, slack, imessage, whatsapp")
     platform_input = input(f"  Platform [{current_platform}]: ").strip().lower() or current_platform
-    if platform_input not in ("telegram", "discord", "slack"):
+    if platform_input not in ("telegram", "discord", "slack", "imessage", "whatsapp"):
         print(f"  Unknown platform '{platform_input}', keeping '{current_platform}'")
         platform_input = current_platform
 
@@ -733,19 +787,39 @@ def _run_configure(project_root: Path) -> int:
         _info(_PLATFORM_INSTRUCTIONS[platform_input])
 
     print()
-    token = _prompt(current_token or None, f"  {platform_input.capitalize()} bot token", secret=True) or current_token
+    if platform_input == "imessage":
+        token = ""
+        _info("  No token needed for iMessage.")
+    else:
+        token = _prompt(current_token or None, f"  {platform_input.capitalize()} bot token", secret=True) or current_token
     print()
 
+    if platform_input == "imessage":
+        _info("  Enter phone numbers or email addresses of contacts to respond to.")
+    elif platform_input == "whatsapp":
+        _info("  Enter phone numbers with country code.")
     chat_ids_raw = _prompt(",".join(current_chat_ids) or None, "  Allowed chat IDs (comma-separated)")
     chat_ids = [c.strip() for c in (chat_ids_raw or "").split(",") if c.strip()] or current_chat_ids
 
+    current_channel_config = (primary_account.get("channel_config") or {}) if isinstance(primary_account, dict) else {}
     channel_config: dict[str, str] = {}
     if platform_input == "slack":
-        current_app_token = (primary_account.get("channel_config") or {}).get("app_token", "") if isinstance(primary_account, dict) else ""
+        current_app_token = current_channel_config.get("app_token", "")
         print()
         app_token = _prompt(current_app_token or None, "  Slack App-Level Token (xapp-...)", secret=True) or current_app_token
         if app_token:
             channel_config["app_token"] = app_token
+    elif platform_input == "whatsapp":
+        current_bridge_url = current_channel_config.get("bridge_url", "http://localhost:3000")
+        print()
+        bridge_url = input(f"  WhatsApp bridge URL [{current_bridge_url}]: ").strip() or current_bridge_url
+        channel_config["bridge_url"] = bridge_url
+    elif platform_input == "imessage":
+        current_db_path = current_channel_config.get("db_path", "")
+        if current_db_path:
+            print()
+            db_path = input(f"  Messages DB path [{current_db_path}]: ").strip() or current_db_path
+            channel_config["db_path"] = db_path
 
     print()
     default_agent = _prompt(current.get("default_agent"), "  Default agent name") or current.get("default_agent", "main")
