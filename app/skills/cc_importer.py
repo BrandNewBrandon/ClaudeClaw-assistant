@@ -1,12 +1,8 @@
 """Claude Code skill importer — auto-converts CC skill files into ClaudeClaw skills.
 
-Scans ~/.claude/plugins/ for installed Claude Code skills (SKILL.md files),
-reads their markdown content, and exposes them as ClaudeClaw skills via
-context_text() injection. This lets the assistant follow CC skill instructions
-even though it runs in --print mode.
-
-Imported skills appear in /skills output and their instructions are included
-in the agent prompt when relevant (matched via summary keywords).
+Scans ~/.claude/plugins/ and ~/.assistant/cc-skills/ for Claude Code skills
+(SKILL.md files), reads their markdown content, and exposes them as ClaudeClaw
+skills via context_text() injection.
 
 Configuration
 -------------
@@ -22,16 +18,20 @@ If not set, no CC skills are imported (opt-in).
 
 Slash commands
 --------------
-``/cc-skills``             list available Claude Code skills
-``/cc-skill <name>``       show details about a specific CC skill
-``/cc-import <name>``      add a CC skill to the current agent's cc_skills list
-``/cc-remove <name>``      remove a CC skill from the current agent's cc_skills list
+``/cc-skills``                list available Claude Code skills
+``/cc-skill <name>``          show details about a specific CC skill
+``/cc-import <name>``         add a CC skill to the current agent's cc_skills list
+``/cc-remove <name>``         remove a CC skill from the current agent's cc_skills list
+``/cc-install <github-url>``  install a CC skill/plugin from GitHub
+``/cc-uninstall <name>``      remove an installed CC skill/plugin
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
@@ -39,9 +39,13 @@ from ..plugins.base import SkillBase
 
 LOGGER = logging.getLogger(__name__)
 
+# Where user-installed CC skills are stored
+_USER_CC_SKILLS_DIR = Path.home() / ".assistant" / "cc-skills"
+
 # Standard locations for Claude Code plugins
 _CC_PLUGIN_DIRS = [
     Path.home() / ".claude" / "plugins" / "cache",
+    _USER_CC_SKILLS_DIR,
 ]
 
 
@@ -170,12 +174,81 @@ def _save_agent_cc_skills(agents_dir: Path, agent_name: str, cc_skills: list[str
     agent_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def _install_from_github(url: str) -> tuple[str, str]:
+    """Install a CC skill/plugin from a GitHub URL.
+
+    Clones the repo into ~/.assistant/cc-skills/<repo-name>/.
+    Returns (repo_name, message).
+    """
+    # Normalize URL
+    url = url.strip().rstrip("/")
+    if not url.startswith(("http://", "https://", "git@")):
+        # Assume shorthand: "user/repo"
+        if "/" in url and not url.startswith("/"):
+            url = f"https://github.com/{url}"
+        else:
+            raise ValueError(f"Invalid URL or shorthand: {url}. Use 'owner/repo' or full GitHub URL.")
+
+    # Extract repo name from URL
+    repo_name = url.rstrip("/").split("/")[-1]
+    if repo_name.endswith(".git"):
+        repo_name = repo_name[:-4]
+    if not repo_name:
+        raise ValueError(f"Cannot determine repo name from URL: {url}")
+
+    dest = _USER_CC_SKILLS_DIR / repo_name
+    if dest.exists():
+        raise ValueError(f"Already installed: {repo_name}. Use /cc-uninstall {repo_name} first.")
+
+    _USER_CC_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Try git clone first
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(dest)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "git clone failed")
+    except FileNotFoundError:
+        raise ValueError("git is not installed. Install git to use /cc-install.")
+    except subprocess.TimeoutExpired:
+        # Clean up partial clone
+        if dest.exists():
+            shutil.rmtree(dest, ignore_errors=True)
+        raise ValueError("git clone timed out after 60 seconds.")
+
+    # Verify it has skill files
+    skill_files = list(dest.rglob("SKILL.md"))
+    if not skill_files:
+        # Not a CC plugin — clean up
+        shutil.rmtree(dest, ignore_errors=True)
+        raise ValueError(f"No SKILL.md files found in {url}. Not a valid Claude Code plugin.")
+
+    skill_names = []
+    for sf in skill_files:
+        name = _parse_skill_name(sf)
+        if name:
+            skill_names.append(name)
+
+    return repo_name, f"Installed {repo_name} with {len(skill_names)} skill(s): {', '.join(skill_names)}"
+
+
+def _uninstall_skill(name: str) -> str:
+    """Remove an installed CC skill/plugin by repo name."""
+    dest = _USER_CC_SKILLS_DIR / name
+    if not dest.exists():
+        raise ValueError(f"Not installed: {name}")
+    shutil.rmtree(dest)
+    return f"Uninstalled {name}."
+
+
 class CCImporterSkill(SkillBase):
     """Imports Claude Code skills into ClaudeClaw."""
 
     name = "cc_importer"
-    version = "1.0"
-    description = "Import Claude Code skills — /cc-skills to list, /cc-import to add"
+    version = "1.1"
+    description = "Import Claude Code skills — /cc-skills to list, /cc-install to add from GitHub"
 
     def __init__(self, agents_dir: Path | None = None) -> None:
         self._agents_dir = agents_dir
@@ -198,6 +271,8 @@ class CCImporterSkill(SkillBase):
             "/cc-skill": self._cmd_detail,
             "/cc-import": self._cmd_import,
             "/cc-remove": self._cmd_remove,
+            "/cc-install": self._cmd_install,
+            "/cc-uninstall": self._cmd_uninstall,
         }
 
     def context_text(self) -> str:
@@ -367,6 +442,48 @@ class CCImporterSkill(SkillBase):
         if not results:
             return f"Skill '{skill_name}' not found in any agent's cc_skills."
         return f"Removed '{skill_name}':\n" + "\n".join(results)
+
+    def _cmd_install(self, text: str) -> str:
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            return (
+                "Usage: /cc-install <github-url>\n"
+                "Examples:\n"
+                "  /cc-install owner/repo\n"
+                "  /cc-install https://github.com/owner/repo"
+            )
+        url = parts[1].strip()
+        try:
+            repo_name, message = _install_from_github(url)
+            # Invalidate cache so new skills appear immediately
+            self._skill_cache = None
+            return message
+        except ValueError as exc:
+            return f"Install failed: {exc}"
+        except Exception as exc:
+            return f"Install failed: {exc}"
+
+    def _cmd_uninstall(self, text: str) -> str:
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            # List installed repos
+            if not _USER_CC_SKILLS_DIR.exists():
+                return "No skills installed. Use /cc-install <github-url> to install."
+            installed = [d.name for d in sorted(_USER_CC_SKILLS_DIR.iterdir()) if d.is_dir()]
+            if not installed:
+                return "No skills installed. Use /cc-install <github-url> to install."
+            return (
+                "Usage: /cc-uninstall <name>\n"
+                f"Installed: {', '.join(installed)}"
+            )
+        name = parts[1].strip()
+        try:
+            message = _uninstall_skill(name)
+            # Invalidate cache
+            self._skill_cache = None
+            return message
+        except ValueError as exc:
+            return str(exc)
 
 
 SKILL_CLASS = CCImporterSkill
