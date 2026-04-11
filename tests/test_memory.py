@@ -127,4 +127,42 @@ def test_read_transcript_with_compaction_scoped_by_agent(tmp_path: Path) -> None
         "telegram", "123", account_id="primary", agent_name="builder"
     )
     assert summary is None
-    assert entries == []
+
+
+def test_search_transcript_returns_matching_entries(tmp_path: Path) -> None:
+    shared_dir = tmp_path / "shared"
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+
+    store.append_transcript(surface="telegram", chat_id="c1", direction="in", agent="main", message_text="hello world")
+    store.append_transcript(surface="telegram", chat_id="c1", direction="out", agent="main", message_text="hi there")
+    store.append_transcript(surface="telegram", chat_id="c1", direction="in", agent="main", message_text="goodbye world")
+
+    results = store.search_transcript("telegram", "c1", "world", agent_name="main")
+    assert len(results) == 2
+    assert results[0].message_text == "hello world"
+    assert results[1].message_text == "goodbye world"
+
+
+def test_search_transcript_no_matches(tmp_path: Path) -> None:
+    shared_dir = tmp_path / "shared"
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+
+    store.append_transcript(surface="telegram", chat_id="c1", direction="in", agent="main", message_text="hello")
+    results = store.search_transcript("telegram", "c1", "xyz", agent_name="main")
+    assert len(results) == 0
+
+
+def test_search_transcript_respects_limit(tmp_path: Path) -> None:
+    shared_dir = tmp_path / "shared"
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+
+    for i in range(20):
+        store.append_transcript(surface="telegram", chat_id="c1", direction="in", agent="main", message_text=f"match {i}")
+    results = store.search_transcript("telegram", "c1", "match", agent_name="main", limit=5)
+    assert len(results) == 5

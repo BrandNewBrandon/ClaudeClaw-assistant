@@ -247,6 +247,43 @@ class MemoryStore:
             )
         return entries
 
+    def search_transcript(
+        self,
+        surface: str,
+        chat_id: str,
+        query: str,
+        *,
+        account_id: str = "primary",
+        agent_name: str = "main",
+        limit: int = 10,
+    ) -> list[TranscriptEntry]:
+        """Search transcript entries matching query (case-insensitive substring)."""
+        path = self.transcript_path(surface, chat_id, account_id=account_id, agent_name=agent_name)
+        if not path.exists():
+            return []
+
+        query_lower = query.lower()
+        matches: list[TranscriptEntry] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            text = str(raw.get("message_text", ""))
+            if query_lower in text.lower():
+                matches.append(
+                    TranscriptEntry(
+                        timestamp=str(raw.get("timestamp", "")),
+                        surface=str(raw.get("surface", "")),
+                        account_id=str(raw.get("account_id", "primary")),
+                        chat_id=str(raw.get("chat_id", "")),
+                        direction=str(raw.get("direction", "")),
+                        agent=str(raw.get("agent", "")),
+                        message_text=text,
+                        metadata=raw.get("metadata", {}) or {},
+                    )
+                )
+        return matches[-limit:]
+
     def consolidate_agent_notes(
         self,
         agent: str,
