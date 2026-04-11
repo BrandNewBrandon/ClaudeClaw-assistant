@@ -274,6 +274,8 @@ class AssistantRouter:
             job_store=self._job_store,
             model_runner=self._model_runner,
             agents_dir=self._config.agents_dir,
+            memory_store=self._memory,
+            semantic_search_enabled=self._config.semantic_search_enabled,
         )
         for account_id, account_runtime in self._account_runtimes.items():
             ch = account_runtime.channel
