@@ -25,6 +25,7 @@ from .logging_utils import configure_logging
 from .briefing import BriefingThread
 from .hooks import HookRegistry
 from .memory import ConsolidationThread, MemoryStore
+from .pdf_utils import extract_pdf_text, PDF_INLINE_PAGE_LIMIT
 from .model_runner import ModelRunner, ModelRunnerError
 from .pairing import PairingStore
 from .runtime_state import RuntimeState
@@ -660,6 +661,8 @@ class AssistantRouter:
             return
 
         image_path = message.image_path
+        document_path = getattr(message, "document_path", None)
+        document_name = getattr(message, "document_name", None)
         already_sent = False
         typing_stop: threading.Event | None = None
         typing_thread: threading.Thread | None = None
@@ -736,6 +739,8 @@ class AssistantRouter:
                 account_id=account_id,
                 chat_id=message.chat_id,
                 image_path=image_path,
+                document_path=document_path,
+                document_name=document_name,
                 channel=channel,
                 compaction_summary=compaction_summary,
             )
@@ -761,6 +766,11 @@ class AssistantRouter:
             if image_path:
                 try:
                     Path(image_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if document_path:
+                try:
+                    Path(document_path).unlink(missing_ok=True)
                 except OSError:
                     pass
 
@@ -815,6 +825,8 @@ class AssistantRouter:
         account_id: str = "",
         chat_id: str = "",
         image_path: str | None = None,
+        document_path: str | None = None,
+        document_name: str | None = None,
         channel: "BaseChannel | None" = None,
         compaction_summary: str | None = None,
     ) -> tuple[str, str | None, bool]:
@@ -834,6 +846,38 @@ class AssistantRouter:
                 message_text
                 + f"\n\n[Photo attached — saved at: {image_path} — use your file tools to read and analyze it.]"
             ).lstrip()
+
+        # If a PDF document was attached, extract text and inline or save
+        if document_path:
+            try:
+                pdf_text, page_count = extract_pdf_text(Path(document_path))
+                fname = document_name or "document.pdf"
+                if not pdf_text.strip():
+                    message_text = (
+                        message_text
+                        + f"\n\n[PDF document: {fname} — could not extract text (may be image-only).]"
+                    ).lstrip()
+                elif page_count <= PDF_INLINE_PAGE_LIMIT:
+                    message_text = (
+                        message_text
+                        + f"\n\n[PDF document: {fname}, {page_count} page(s)]\n{pdf_text}"
+                    ).lstrip()
+                else:
+                    # Save to agent documents directory
+                    docs_dir = self._agents_dir / active_agent / "documents"
+                    docs_dir.mkdir(parents=True, exist_ok=True)
+                    safe_name = Path(fname).stem + ".txt"
+                    saved_path = docs_dir / safe_name
+                    saved_path.write_text(pdf_text, encoding="utf-8")
+                    message_text = (
+                        message_text
+                        + f"\n\n[PDF document: {fname}, {page_count} pages — saved at: {saved_path}. Use read_file to reference sections.]"
+                    ).lstrip()
+            except ValueError as exc:
+                message_text = (
+                    message_text
+                    + f"\n\n[PDF document error: {exc}]"
+                ).lstrip()
 
         # Determine whether we can stream to this channel
         can_stream = (
