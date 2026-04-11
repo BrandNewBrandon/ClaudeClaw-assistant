@@ -93,6 +93,13 @@ def build_parser() -> argparse.ArgumentParser:
     completion_parser.add_argument("shell", nargs="?", default=None, choices=["bash", "zsh", "fish"],
                                    help="Shell type (auto-detected if omitted)")
 
+    backup_parser = subparsers.add_parser("backup", help="Create a backup of all assistant data")
+    backup_parser.add_argument("-o", "--output", type=str, default=None, help="Output path (default: ~/assistant-backup-TIMESTAMP.tar.gz)")
+
+    restore_backup_parser = subparsers.add_parser("backup-restore", help="Restore assistant data from a backup")
+    restore_backup_parser.add_argument("archive", type=str, help="Path to backup .tar.gz file")
+    restore_backup_parser.add_argument("--dry-run", action="store_true", help="Show what would be restored without writing")
+
     daemon_parser = subparsers.add_parser("daemon", help="Manage daemon autostart registration")
     daemon_sub = daemon_parser.add_subparsers(dest="daemon_action", required=True)
     daemon_sub.add_parser("install", help="Register autostart on login (launchd / systemd / schtasks)")
@@ -2077,6 +2084,45 @@ def main() -> int:
         except AgentManagerError as exc:
             print(f"Error: {exc}")
             return 1
+
+    if args.command == "backup":
+        from .backup import create_backup
+        output = Path(args.output) if args.output else None
+        try:
+            path = create_backup(output)
+            print(f"Backup created: {path}")
+            # Show size
+            size_mb = path.stat().st_size / (1024 * 1024)
+            print(f"Size: {size_mb:.1f} MB")
+        except Exception as exc:
+            print(f"Backup failed: {exc}")
+            return 1
+        return 0
+
+    if args.command == "backup-restore":
+        from .backup import restore_backup, list_backup_contents
+        archive = Path(args.archive)
+        if not archive.exists():
+            print(f"File not found: {archive}")
+            return 1
+        try:
+            manifest = list_backup_contents(archive)
+            print(f"Backup from: {manifest.get('created_at', 'unknown')}")
+            print(f"Files: {len(manifest.get('contents', []))}")
+            files = restore_backup(archive, dry_run=args.dry_run)
+            if args.dry_run:
+                print(f"\nWould restore {len(files)} file(s):")
+                for f in files[:20]:
+                    print(f"  {f}")
+                if len(files) > 20:
+                    print(f"  ... and {len(files) - 20} more")
+            else:
+                print(f"\nRestored {len(files)} file(s).")
+                print("Restart the runtime for changes to take effect.")
+        except Exception as exc:
+            print(f"Restore failed: {exc}")
+            return 1
+        return 0
 
     _print_quick_help()
     parser.print_help()
