@@ -26,6 +26,9 @@ from .briefing import BriefingThread
 from .hooks import HookRegistry
 from .memory import ConsolidationThread, MemoryStore
 from .pdf_utils import extract_pdf_text, PDF_INLINE_PAGE_LIMIT
+from .job_store import JobStore
+from .job_runner import JobRunner
+from .monitors import MonitorRunner, disk_usage_monitor, process_count_monitor
 from .model_runner import ModelRunner, ModelRunnerError
 from .pairing import PairingStore
 from .runtime_state import RuntimeState
@@ -144,6 +147,10 @@ class AssistantRouter:
             self._briefing_thread.start()
         if self._reset_thread is not None:
             self._reset_thread.start()
+        if self._job_runner is not None:
+            self._job_runner.start()
+        if self._monitor_runner is not None:
+            self._monitor_runner.start()
 
         self._hooks.emit("startup", accounts=list(self._account_runtimes.keys()))
 
@@ -166,6 +173,10 @@ class AssistantRouter:
                 self._briefing_thread.stop()
             if self._reset_thread is not None:
                 self._reset_thread.stop()
+            if self._job_runner is not None:
+                self._job_runner.stop()
+            if self._monitor_runner is not None:
+                self._monitor_runner.stop()
             for account_runtime in self._account_runtimes.values():
                 account_runtime.channel.stop()
             for thread in worker_threads:
@@ -257,6 +268,30 @@ class AssistantRouter:
             for chat_id in account_runtime.account.allowed_chat_ids:
                 self._briefing_thread.register_target(key, chat_id)
 
+        # Background job system
+        self._job_store = JobStore(get_state_dir() / "jobs.db")
+        self._job_runner = JobRunner(
+            job_store=self._job_store,
+            model_runner=self._model_runner,
+            agents_dir=self._config.agents_dir,
+        )
+        for account_id, account_runtime in self._account_runtimes.items():
+            ch = account_runtime.channel
+            platform = account_runtime.account.platform
+            self._job_runner.register_sender(f"{platform}:{account_id}", _make_sender(ch))
+
+        # System monitors
+        self._monitor_runner = MonitorRunner()
+        self._monitor_runner.register_monitor("disk_usage", disk_usage_monitor())
+        self._monitor_runner.register_monitor("process_count", process_count_monitor())
+        for account_id, account_runtime in self._account_runtimes.items():
+            ch = account_runtime.channel
+            platform = account_runtime.account.platform
+            key = f"{platform}:{account_id}"
+            self._monitor_runner.register_sender(key, _make_sender(ch))
+            for cid in account_runtime.account.allowed_chat_ids:
+                self._monitor_runner.register_target(key, cid)
+
         # Session compaction
         self._last_activity: dict[str, float] = {}   # session_key -> monotonic time
         self._active_agents: dict[str, str] = {}      # session_key -> agent name
@@ -306,6 +341,9 @@ class AssistantRouter:
             model_runner=self._model_runner,
             plugin_registry=self._plugin_registry,
             briefing_thread=self._briefing_thread,
+            job_store=self._job_store,
+            job_runner=self._job_runner,
+            monitor_runner=self._monitor_runner,
         )
 
     def _start_account_workers(self) -> list[threading.Thread]:
