@@ -166,7 +166,7 @@ def _parse_accounts(raw: dict[str, Any]) -> tuple[dict[str, AccountConfig], dict
         platform = account_raw.get("platform", "telegram")
         if not isinstance(platform, str) or not platform.strip():
             raise ConfigError(f"Invalid platform for account: {cleaned_account_id}")
-        supported = {"telegram", "discord", "slack"}
+        supported = {"telegram", "discord", "slack", "imessage", "whatsapp"}
         if platform.lower() not in supported:
             raise ConfigError(f"Unsupported account platform {platform!r}. Supported: {sorted(supported)}")
 
