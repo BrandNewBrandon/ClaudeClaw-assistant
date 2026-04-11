@@ -395,12 +395,37 @@ class AssistantRouter:
             raise SystemExit(f"Account worker failed for {account_id}: {exc}") from exc
 
     def _account_worker(self, account_id: str, account_runtime: AccountRuntime) -> None:
+        consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
                 self._poll_account_once(account_id, account_runtime)
+                consecutive_failures = 0  # Reset on success
             except Exception as exc:
-                self._worker_errors.put((account_id, exc))
-                return
+                consecutive_failures += 1
+                if consecutive_failures == 5:
+                    LOGGER.warning(
+                        "Polling has failed %d times for account=%s: %s. "
+                        "Check your network connection and bot token.",
+                        consecutive_failures, account_id, exc,
+                    )
+                elif consecutive_failures == 20:
+                    LOGGER.error(
+                        "Polling has failed %d times for account=%s. "
+                        "The bot may be offline. Last error: %s",
+                        consecutive_failures, account_id, exc,
+                    )
+                elif consecutive_failures >= 50:
+                    LOGGER.error(
+                        "Polling failed %d times for account=%s. Giving up. Error: %s",
+                        consecutive_failures, account_id, exc,
+                    )
+                    self._worker_errors.put((account_id, exc))
+                    return
+                else:
+                    LOGGER.debug(
+                        "Polling error for account=%s (attempt %d): %s",
+                        account_id, consecutive_failures, exc,
+                    )
 
     def _poll_account_once(self, account_id: str, account_runtime: AccountRuntime) -> None:
         # Check for newly approved pairings from the CLI

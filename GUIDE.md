@@ -274,6 +274,11 @@ These are commands you type in Terminal. They manage the runtime itself.
 | `assistant pair <code>` | Approve a new user's pairing request |
 | `assistant pair --list` | Show pending pairing requests |
 | `assistant completion` | Generate shell completions for bash, zsh, or fish |
+| `assistant backup` | Create a backup archive of all assistant data |
+| `assistant backup-restore <file>` | Restore assistant data from a backup archive |
+| `assistant backup-restore <file> --dry-run` | Preview what would be restored without writing |
+| `assistant logs` | View runtime log (live tail) |
+| `assistant hatch` | Run the first-conversation wizard with your agent |
 
 ---
 
@@ -287,6 +292,7 @@ in the chat with your bot. They start with a `/`.
 | Command | What it does |
 |---|---|
 | `/status` | Shows which agent is active, the model being used, and runtime info |
+| `/diagnostics` | Shows runtime diagnostics — message counts, thread health, errors |
 | `/agents` | Lists all available agents |
 | `/agent` | Shows details about the currently active agent |
 | `/agent info <name>` | Shows details about a specific agent by name |
