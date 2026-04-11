@@ -103,10 +103,19 @@ def build_plugin_registry(
     *,
     user_skills_dir: Path | None = None,
     extra_skills: list[SkillBase] | None = None,
+    agents_dir: Path | None = None,
 ) -> PluginRegistry:
     """Discover and load all skills, return a ready ``PluginRegistry``."""
     skills: list[SkillBase] = []
     skills.extend(load_builtin_skills())
+
+    # CC skill importer (needs agents_dir to know which skills each agent enables)
+    try:
+        from ..skills.cc_importer import CCImporterSkill
+        skills.append(CCImporterSkill(agents_dir=agents_dir))
+    except Exception:
+        LOGGER.debug("CC skill importer not available", exc_info=True)
+
     if user_skills_dir is not None:
         skills.extend(load_user_skills(user_skills_dir))
     if extra_skills:

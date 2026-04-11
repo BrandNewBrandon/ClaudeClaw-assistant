@@ -348,7 +348,10 @@ class AssistantRouter:
             self._hooks.load_from_directory(user_hooks_dir)
 
         user_skills_dir = get_state_dir().parent / "skills"
-        self._plugin_registry = build_plugin_registry(user_skills_dir=user_skills_dir)
+        self._plugin_registry = build_plugin_registry(
+            user_skills_dir=user_skills_dir,
+            agents_dir=self._config.agents_dir,
+        )
 
         self._commands = CommandHandler(
             agents_dir=self._config.agents_dir,
@@ -1059,7 +1062,7 @@ class AssistantRouter:
 
         _max_tools = 10 if _agent_cfg.computer_use else 3
         tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
-        skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
+        skill_context = self._plugin_registry.get_relevant_context_text(message_text, agent_name=active_agent) if self._plugin_registry else ""
         tool_results: list[str] = []
         last_output = ""
         last_session_id: str | None = None
@@ -1232,7 +1235,7 @@ class AssistantRouter:
 
         _max_tools = 10 if _agent_cfg.computer_use else 3
         tool_loop = ToolLoop(tool_registry, max_tool_calls=_max_tools)
-        skill_context = self._plugin_registry.get_relevant_context_text(message_text) if self._plugin_registry else ""
+        skill_context = self._plugin_registry.get_relevant_context_text(message_text, agent_name=active_agent) if self._plugin_registry else ""
         require_tool = is_obvious_web_request(message_text)
 
         # message_id is set lazily on the first real chunk of text so no

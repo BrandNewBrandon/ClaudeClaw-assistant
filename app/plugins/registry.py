@@ -84,15 +84,24 @@ class PluginRegistry:
                 LOGGER.exception("Skill context_text error: %s", skill.name)
         return "\n\n".join(parts)
 
-    def get_relevant_context_text(self, message: str) -> str:
+    def get_relevant_context_text(self, message: str, *, agent_name: str | None = None) -> str:
         """Only include skill context for skills whose summary keywords match the message.
 
         Falls back to full context if no skills match (so nothing is lost).
+        If ``agent_name`` is provided, also includes agent-specific context
+        from skills that support it (e.g., imported Claude Code skills).
         """
         lowered = message.lower()
         relevant: list[str] = []
         for skill in self._available:
             try:
+                # Agent-specific context (CC importer)
+                if agent_name and hasattr(skill, "context_text_for_agent"):
+                    agent_text = skill.context_text_for_agent(agent_name)
+                    if agent_text and agent_text.strip():
+                        relevant.append(agent_text.strip())
+                        continue  # Don't also add generic context_text
+
                 keywords = skill.summary.lower().split()
                 if not keywords:
                     # No summary defined — always include
