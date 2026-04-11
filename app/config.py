@@ -241,13 +241,35 @@ def load_config(config_path: str | Path) -> AppConfig:
     if _session_reset_daily_hour is not None and not (0 <= _session_reset_daily_hour <= 23):
         raise ConfigError(f"Invalid session_reset_daily_hour: {_session_reset_daily_hour}. Must be 0-23.")
 
+    _claude_timeout_seconds = _require_int(raw, "claude_timeout_seconds")
+    if _claude_timeout_seconds < 1 or _claude_timeout_seconds > 600:
+        raise ConfigError(f"Invalid claude_timeout_seconds: {_claude_timeout_seconds}. Must be 1-600.")
+    _telegram_poll_timeout_seconds = _require_int(raw, "telegram_poll_timeout_seconds")
+    if _telegram_poll_timeout_seconds < 1 or _telegram_poll_timeout_seconds > 120:
+        raise ConfigError(f"Invalid telegram_poll_timeout_seconds: {_telegram_poll_timeout_seconds}. Must be 1-120.")
+    _typing_interval_seconds = _require_int(raw, "typing_interval_seconds")
+    if _typing_interval_seconds < 1 or _typing_interval_seconds > 30:
+        raise ConfigError(f"Invalid typing_interval_seconds: {_typing_interval_seconds}. Must be 1-30.")
+    _max_prompt_chars = int(raw.get("max_prompt_chars", 24_000))
+    if _max_prompt_chars < 1000 or _max_prompt_chars > 200_000:
+        raise ConfigError(f"Invalid max_prompt_chars: {_max_prompt_chars}. Must be 1000-200000.")
+    _compaction_token_budget = int(raw.get("compaction_token_budget", 12_000))
+    if _compaction_token_budget < 1000 or _compaction_token_budget > 200_000:
+        raise ConfigError(f"Invalid compaction_token_budget: {_compaction_token_budget}. Must be 1000-200000.")
+    _cache_ttl_seconds = int(raw.get("cache_ttl_seconds", 300))
+    if _cache_ttl_seconds < 0 or _cache_ttl_seconds > 86400:
+        raise ConfigError(f"Invalid cache_ttl_seconds: {_cache_ttl_seconds}. Must be 0-86400.")
+    _cooldown_seconds_per_chat = float(raw.get("cooldown_seconds_per_chat", 0.0))
+    if _cooldown_seconds_per_chat < 0 or _cooldown_seconds_per_chat > 300:
+        raise ConfigError(f"Invalid cooldown_seconds_per_chat: {_cooldown_seconds_per_chat}. Must be 0-300.")
+
     return AppConfig(
         telegram_bot_token=primary_account.token,
         allowed_chat_ids=primary_account.allowed_chat_ids,
         default_agent=primary_routing.default_agent,
-        claude_timeout_seconds=_require_int(raw, "claude_timeout_seconds"),
-        telegram_poll_timeout_seconds=_require_int(raw, "telegram_poll_timeout_seconds"),
-        typing_interval_seconds=_require_int(raw, "typing_interval_seconds"),
+        claude_timeout_seconds=_claude_timeout_seconds,
+        telegram_poll_timeout_seconds=_telegram_poll_timeout_seconds,
+        typing_interval_seconds=_typing_interval_seconds,
         project_root=project_root,
         agents_dir=agents_dir,
         shared_dir=shared_dir,
@@ -259,9 +281,9 @@ def load_config(config_path: str | Path) -> AppConfig:
         accounts=accounts,
         routing=routing,
         cache_enabled=bool(raw.get("cache_enabled", True)),
-        cache_ttl_seconds=int(raw.get("cache_ttl_seconds", 300)),
-        cooldown_seconds_per_chat=float(raw.get("cooldown_seconds_per_chat", 0.0)),
-        max_prompt_chars=int(raw.get("max_prompt_chars", 24_000)),
+        cache_ttl_seconds=_cache_ttl_seconds,
+        cooldown_seconds_per_chat=_cooldown_seconds_per_chat,
+        max_prompt_chars=_max_prompt_chars,
         consolidation_enabled=bool(raw.get("consolidation_enabled", True)),
         consolidation_keep_days=int(raw.get("consolidation_keep_days", 3)),
         consolidation_hour=_consolidation_hour,
@@ -274,7 +296,7 @@ def load_config(config_path: str | Path) -> AppConfig:
         briefing_enabled=bool(raw.get("briefing_enabled", False)),
         briefing_times=[int(h) for h in raw.get("briefing_times", [9])],
         compaction_enabled=bool(raw.get("compaction_enabled", True)),
-        compaction_token_budget=int(raw.get("compaction_token_budget", 12_000)),
+        compaction_token_budget=_compaction_token_budget,
         session_reset_daily_hour=_session_reset_daily_hour,
         session_idle_reset_minutes=int(raw.get("session_idle_reset_minutes")) if raw.get("session_idle_reset_minutes") is not None else None,
     )

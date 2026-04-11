@@ -187,7 +187,15 @@ class WhatsAppChannel(BaseChannel):
             LOGGER.debug("WhatsApp bridge poll failed", exc_info=True)
             return
 
-        messages = data.get("messages", [])
+        if not isinstance(data, dict) or "messages" not in data:
+            LOGGER.debug("WhatsApp bridge returned unexpected response format: %s", type(data).__name__)
+            return
+
+        messages = data["messages"]
+        if not isinstance(messages, list):
+            LOGGER.debug("WhatsApp bridge 'messages' field is not a list")
+            return
+
         for msg in messages:
             msg_id = str(msg.get("id", ""))
             if not msg_id or msg_id in self._seen_ids:

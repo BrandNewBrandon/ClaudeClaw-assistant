@@ -191,7 +191,7 @@ def _tool_search_memory(
         return f"Error searching memory: {exc}"
 
 
-def _tool_append_note(agents_dir: Path, args: dict[str, Any]) -> str:
+def _tool_append_note(agents_dir: Path, args: dict[str, Any], *, memory_store: Any = None) -> str:
     agent_name = str(args.get("agent_name", "")).strip()
     content = str(args.get("content", "")).strip()
     if not agent_name:
@@ -199,9 +199,18 @@ def _tool_append_note(agents_dir: Path, args: dict[str, Any]) -> str:
     if not content:
         return "content is required."
 
-    memory_path = agents_dir / agent_name / "MEMORY.md"
     if not (agents_dir / agent_name).exists():
         return f"Agent not found: {agent_name}"
+
+    if memory_store is not None:
+        try:
+            memory_store.append_daily_note(agent_name, content)
+            return f"Appended {len(content)} chars to {agent_name}/MEMORY.md"
+        except Exception as exc:
+            return f"Error appending note: {exc}"
+
+    # Fallback: direct file write (backward compat)
+    memory_path = agents_dir / agent_name / "MEMORY.md"
     try:
         existing_size = memory_path.stat().st_size if memory_path.exists() else 0
         with memory_path.open("a", encoding="utf-8") as fh:
@@ -394,7 +403,7 @@ class MCPServer:
                 semantic_enabled=self._semantic_enabled,
             )
         if name == "append_note":
-            return _tool_append_note(self._agents_dir, args)
+            return _tool_append_note(self._agents_dir, args, memory_store=self._memory_store)
         return f"Unknown tool: {name}"
 
     def _build_resource_list(self) -> list[dict[str, Any]]:

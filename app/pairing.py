@@ -82,18 +82,19 @@ class PairingStore:
         can pick up the new chat_id without a restart.
         """
         now = time.time()
-        entries = self._read_all()
-        remaining: list[dict[str, Any]] = []
-        result: tuple[str, str] | None = None
+        with self._lock:
+            entries = self._read_all()
+            remaining: list[dict[str, Any]] = []
+            result: tuple[str, str] | None = None
 
-        for entry in entries:
-            if entry.get("code") == code and now - entry.get("created_at", 0) < _CODE_EXPIRY_SECONDS:
-                result = (entry["account_id"], entry["chat_id"])
-                # Don't keep this entry
-                continue
-            remaining.append(entry)
+            for entry in entries:
+                if entry.get("code") == code and now - entry.get("created_at", 0) < _CODE_EXPIRY_SECONDS:
+                    result = (entry["account_id"], entry["chat_id"])
+                    # Don't keep this entry
+                    continue
+                remaining.append(entry)
 
-        self._write_all(remaining)
+            self._write_all(remaining)
 
         if result is not None:
             self._write_approved(result[0], result[1])

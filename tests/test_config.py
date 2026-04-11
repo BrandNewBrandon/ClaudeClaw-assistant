@@ -186,3 +186,40 @@ def test_load_config_rejects_unsupported_provider(tmp_path: Path) -> None:
         assert "Unsupported model_provider" in str(exc)
     else:
         raise AssertionError("Expected ConfigError for unsupported provider")
+
+
+def test_load_config_rejects_zero_timeout(tmp_path: Path) -> None:
+    config_data = {
+        "telegram_bot_token": "test",
+        "allowed_chat_ids": ["123"],
+        "default_agent": "main",
+        "claude_timeout_seconds": 0,
+        "telegram_poll_timeout_seconds": 30,
+        "typing_interval_seconds": 4,
+        "project_root": str(tmp_path),
+        "agents_dir": str(tmp_path / "agents"),
+        "shared_dir": str(tmp_path / "shared"),
+    }
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="claude_timeout_seconds"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_negative_cooldown(tmp_path: Path) -> None:
+    config_data = {
+        "telegram_bot_token": "test",
+        "allowed_chat_ids": ["123"],
+        "default_agent": "main",
+        "claude_timeout_seconds": 60,
+        "telegram_poll_timeout_seconds": 30,
+        "typing_interval_seconds": 4,
+        "project_root": str(tmp_path),
+        "agents_dir": str(tmp_path / "agents"),
+        "shared_dir": str(tmp_path / "shared"),
+        "cooldown_seconds_per_chat": -5,
+    }
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_data), encoding="utf-8")
+    with pytest.raises(ConfigError, match="cooldown_seconds_per_chat"):
+        load_config(config_path)
