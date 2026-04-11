@@ -100,4 +100,84 @@ def run_doctor(config_path: str | Path) -> list[DoctorCheck]:
             else:
                 checks.append(DoctorCheck("routing", "warn", f"Account {account_id} chat {chat_id} routes to missing agent: {agent_name}"))
 
+    # ── Platform-specific checks ─────────────────────────────────────────────
+    platforms_used = {a.platform for a in config.accounts.values()}
+
+    if "imessage" in platforms_used:
+        import platform as _platform
+        if _platform.system() != "Darwin":
+            checks.append(DoctorCheck("imessage", "fail", "iMessage requires macOS, but this system is not macOS."))
+        else:
+            db_path = Path.home() / "Library" / "Messages" / "chat.db"
+            if db_path.exists():
+                checks.append(DoctorCheck("imessage-db", "ok", f"Messages database found: {db_path}"))
+            else:
+                checks.append(DoctorCheck("imessage-db", "fail",
+                    f"Messages database not found at {db_path}. "
+                    "Ensure Messages app is configured and Full Disk Access is granted to Terminal."))
+
+    if "whatsapp" in platforms_used:
+        for account_id, account in config.accounts.items():
+            if account.platform != "whatsapp":
+                continue
+            bridge_url = (account.channel_config or {}).get("bridge_url", "http://localhost:3000")
+            try:
+                import urllib.request
+                req = urllib.request.Request(f"{bridge_url}/messages?since=2000-01-01T00:00:00Z", method="GET")
+                if account.token:
+                    req.add_header("Authorization", f"Bearer {account.token}")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    resp.read()
+                checks.append(DoctorCheck("whatsapp-bridge", "ok", f"WhatsApp bridge reachable at {bridge_url}"))
+            except Exception as exc:
+                checks.append(DoctorCheck("whatsapp-bridge", "warn",
+                    f"WhatsApp bridge not reachable at {bridge_url}: {exc}. "
+                    "Ensure your bridge server is running."))
+
+    # ── Optional dependency checks ───────────────────────────────────────────
+    # Check for pymupdf (PDF support)
+    try:
+        import fitz  # pymupdf
+        checks.append(DoctorCheck("pymupdf", "ok", "pymupdf installed — PDF document support available."))
+    except ImportError:
+        checks.append(DoctorCheck("pymupdf", "warn", "pymupdf not installed — PDF documents will not be processed. Install with: pip install pymupdf"))
+
+    # Check for pyautogui (computer use)
+    try:
+        import pyautogui  # noqa: F401
+        checks.append(DoctorCheck("pyautogui", "ok", "pyautogui installed — computer use tools available."))
+    except ImportError:
+        # Only warn if any agent has computer_use enabled
+        from .agent_config import load_agent_config
+        any_cu = False
+        if config.agents_dir.exists():
+            for agent_path in config.agents_dir.iterdir():
+                if agent_path.is_dir():
+                    try:
+                        ac = load_agent_config(agent_path)
+                        if ac.computer_use:
+                            any_cu = True
+                            break
+                    except Exception:
+                        pass
+        if any_cu:
+            checks.append(DoctorCheck("pyautogui", "warn",
+                "pyautogui not installed but computer_use is enabled for an agent. "
+                "Install with: pip install pyautogui Pillow"))
+        else:
+            checks.append(DoctorCheck("pyautogui", "ok", "pyautogui not installed (not needed — no agent has computer_use enabled)."))
+
+    # Check for semantic search dependencies
+    try:
+        import fastembed  # noqa: F401
+        import numpy  # noqa: F401
+        checks.append(DoctorCheck("semantic", "ok", "fastembed + numpy installed — semantic memory search available."))
+    except ImportError:
+        if config.semantic_search_enabled:
+            checks.append(DoctorCheck("semantic", "warn",
+                "Semantic search is enabled but fastembed/numpy not installed. "
+                "Falling back to keyword search. Install with: pip install fastembed numpy"))
+        else:
+            checks.append(DoctorCheck("semantic", "ok", "Semantic search disabled (fastembed not needed)."))
+
     return checks

@@ -66,3 +66,29 @@ def test_doctor_warns_on_missing_routing_target(tmp_path: Path) -> None:
     messages = [check.message for check in checks]
     assert any("Account primary chat 123 routes to missing agent: builder" in message for message in messages)
     assert any("Agents path:" in message for message in messages)
+
+
+def test_doctor_checks_pymupdf(tmp_path: Path) -> None:
+    """Doctor should report pymupdf status."""
+    project_root = tmp_path / "project"
+    (project_root / "agents" / "main").mkdir(parents=True)
+    (project_root / "shared").mkdir(parents=True)
+    config_path = project_root / "config" / "config.json"
+    write_config(config_path, project_root)
+
+    checks = run_doctor(config_path)
+    names = [c.name for c in checks]
+    assert "pymupdf" in names
+
+
+def test_doctor_checks_pyautogui(tmp_path: Path) -> None:
+    """Doctor should report pyautogui status."""
+    project_root = tmp_path / "project"
+    (project_root / "agents" / "main").mkdir(parents=True)
+    (project_root / "shared").mkdir(parents=True)
+    config_path = project_root / "config" / "config.json"
+    write_config(config_path, project_root)
+
+    checks = run_doctor(config_path)
+    names = [c.name for c in checks]
+    assert "pyautogui" in names
