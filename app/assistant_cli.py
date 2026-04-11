@@ -75,9 +75,10 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("-n", "--lines", type=int, default=50, help="Lines of history to show (default: 50)")
     logs_parser.add_argument("--no-follow", action="store_true", help="Print last N lines and exit (don't tail)")
 
-    ui_parser = subparsers.add_parser("ui", help="Start the web dashboard at localhost:18790")
+    ui_parser = subparsers.add_parser("ui", aliases=["dashboard"], help="Start the web dashboard at localhost:18790")
     ui_parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     ui_parser.add_argument("--port", type=int, default=18790, help="Bind port (default: 18790)")
+    ui_parser.add_argument("--open", action="store_true", help="Open the dashboard in your browser automatically")
 
     subparsers.add_parser("mcp", help="Start the MCP stdio server")
 
@@ -125,7 +126,8 @@ def _print_quick_help() -> None:
     print("  assistant daemon status     Show autostart registration")
     print("  assistant chat              Chat with an agent in the terminal")
     print("  assistant chat --agent <n>  Chat with a specific agent")
-    print("  assistant ui                Open web dashboard (localhost:18790)")
+    print("  assistant dashboard          Open web dashboard (localhost:18790)")
+    print("  assistant dashboard --open   Open web dashboard and launch browser")
     print("  assistant mcp               Start MCP stdio server")
     print("  assistant add <name>        Create a new agent (interactive wizard)")
     print("  assistant list-agents       List all agents")
@@ -723,7 +725,7 @@ def _run_init(project_root: Path) -> int:
     _info(f"    AGENT.md  — the assistant's personality (its soul)")
     _info(f"    USER.md   — what the agent knows about you")
     _info("")
-    _info("  Run 'assistant ui' to open the web dashboard.")
+    _info("  Run 'assistant dashboard' to open the web dashboard.")
     print()
 
     # Offer to hatch the agent
@@ -1946,10 +1948,15 @@ def main() -> int:
         print("- Direct: python -m pytest")
         return 0
 
-    if args.command == "ui":
+    if args.command in ("ui", "dashboard"):
         from .web.server import WebDashboard
 
         dashboard = WebDashboard(host=args.host, port=args.port)
+        if args.open:
+            # Open browser after a short delay so the server is ready
+            import webbrowser
+            import threading as _threading
+            _threading.Timer(0.5, webbrowser.open, args=[f"http://{args.host}:{args.port}"]).start()
         try:
             dashboard.start(blocking=True)
         except OSError as exc:
