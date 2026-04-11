@@ -28,9 +28,10 @@ class TranscriptEntry:
 
 
 class MemoryStore:
-    def __init__(self, shared_dir: Path, agents_dir: Path) -> None:
+    def __init__(self, shared_dir: Path, agents_dir: Path, *, embedding_model: str | None = None) -> None:
         self._shared_dir = shared_dir
         self._agents_dir = agents_dir
+        self._embedding_model = embedding_model
         self._embedding_indices: dict[str, "EmbeddingIndex"] = {}  # agent -> index
 
     def long_term_memory_path(self, agent: str) -> Path:
@@ -101,7 +102,7 @@ class MemoryStore:
             return self._embedding_indices[agent]
 
         index_dir = self._agents_dir / agent / "memory" / "embeddings"
-        index = EmbeddingIndex(agent, index_dir)
+        index = EmbeddingIndex(agent, index_dir, model_name=self._embedding_model)
 
         # If no saved index exists, build from current sources
         if not (index_dir / "manifest.json").exists():

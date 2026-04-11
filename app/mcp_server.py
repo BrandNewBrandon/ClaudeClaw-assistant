@@ -83,7 +83,15 @@ def _tool_list_agents(agents_dir: Path, _args: dict[str, Any]) -> str:
     return "Available agents:\n" + "\n".join(f"  - {n}" for n in names)
 
 
-def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
+def _tool_invoke_agent(
+    agents_dir: Path,
+    args: dict[str, Any],
+    *,
+    context_builder: Any = None,
+    memory_store: Any = None,
+    semantic_enabled: bool = True,
+    cfg: dict[str, Any] | None = None,
+) -> str:
     agent_name = str(args.get("agent_name", "")).strip()
     message = str(args.get("message", "")).strip()
     chat_id = str(args.get("chat_id", "mcp")).strip() or "mcp"
@@ -97,29 +105,37 @@ def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
 
     try:
         from .claude_runner import ClaudeCodeRunner
-        from .context_builder import ContextBuilder
-        from .memory import MemoryStore
-        from .app_paths import get_config_file
-        from .config_manager import load_raw_config
         from .tools import ToolLoop, build_default_registry
 
-        cfg = load_raw_config(get_config_file())
+        if cfg is None:
+            from .app_paths import get_config_file
+            from .config_manager import load_raw_config
+            cfg = load_raw_config(get_config_file())
+
         project_root = Path(cfg.get("project_root", ".")).expanduser()
-        shared_dir = Path(cfg.get("shared_dir", str(project_root / "shared"))).expanduser()
-        semantic = cfg.get("semantic_search_enabled", True)
+
+        if context_builder is None:
+            from .context_builder import ContextBuilder
+            context_builder = ContextBuilder(agents_dir=agents_dir)
+
+        if memory_store is None:
+            from .memory import MemoryStore
+            shared_dir = Path(cfg.get("shared_dir", str(project_root / "shared"))).expanduser()
+            memory_store = MemoryStore(
+                shared_dir=shared_dir, agents_dir=agents_dir,
+                embedding_model=cfg.get("embedding_model"),
+            )
 
         runner = ClaudeCodeRunner(
             timeout_seconds=int(cfg.get("claude_timeout_seconds", 120)),
             model=cfg.get("claude_model"),
             effort=cfg.get("claude_effort"),
         )
-        memory_store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
-        context_builder = ContextBuilder(agents_dir=agents_dir)
         tool_registry = build_default_registry(project_root)
         tool_loop = ToolLoop(tool_registry)
 
         context = context_builder.load_agent_context(agent_name)
-        relevant_memory = memory_store.find_relevant_memory(agent_name, message, semantic=semantic)
+        relevant_memory = memory_store.find_relevant_memory(agent_name, message, semantic=semantic_enabled)
         recent_transcript = memory_store.read_recent_transcript("mcp", chat_id, agent_name=agent_name)
 
         prompt = context_builder.build_prompt(
@@ -148,7 +164,14 @@ def _tool_invoke_agent(agents_dir: Path, args: dict[str, Any]) -> str:
         return f"Error invoking agent: {exc}"
 
 
-def _tool_search_memory(agents_dir: Path, shared_dir: Path, args: dict[str, Any]) -> str:
+def _tool_search_memory(
+    agents_dir: Path,
+    shared_dir: Path,
+    args: dict[str, Any],
+    *,
+    memory_store: Any = None,
+    semantic_enabled: bool = True,
+) -> str:
     agent_name = str(args.get("agent_name", "")).strip()
     query = str(args.get("query", "")).strip()
     if not agent_name:
@@ -157,13 +180,10 @@ def _tool_search_memory(agents_dir: Path, shared_dir: Path, args: dict[str, Any]
         return "query is required."
 
     try:
-        from .memory import MemoryStore
-        from .app_paths import get_config_file
-        from .config_manager import load_raw_config
-        cfg = load_raw_config(get_config_file())
-        semantic = cfg.get("semantic_search_enabled", True)
-        store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
-        snippets = store.find_relevant_memory(agent_name, query, limit=8, semantic=semantic)
+        if memory_store is None:
+            from .memory import MemoryStore
+            memory_store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+        snippets = memory_store.find_relevant_memory(agent_name, query, limit=8, semantic=semantic_enabled)
         if not snippets:
             return f"No relevant memory found for query: {query}"
         return "\n\n".join(f"- {s}" for s in snippets)
@@ -296,6 +316,22 @@ _TOOLS = [
 class MCPServer:
     def __init__(self) -> None:
         self._agents_dir, self._shared_dir = _load_paths()
+        # Shared instances — reused across requests for caching benefit
+        from .context_builder import ContextBuilder
+        from .memory import MemoryStore
+        from .app_paths import get_config_file
+        from .config_manager import load_raw_config
+        try:
+            cfg = load_raw_config(get_config_file())
+        except Exception:
+            cfg = {}
+        self._context_builder = ContextBuilder(agents_dir=self._agents_dir)
+        self._memory_store = MemoryStore(
+            shared_dir=self._shared_dir, agents_dir=self._agents_dir,
+            embedding_model=cfg.get("embedding_model"),
+        )
+        self._semantic_enabled = cfg.get("semantic_search_enabled", True)
+        self._cfg = cfg
 
     def handle(self, req: dict[str, Any]) -> dict[str, Any] | None:
         req_id = req.get("id")
@@ -344,9 +380,19 @@ class MCPServer:
         if name == "list_agents":
             return _tool_list_agents(self._agents_dir, args)
         if name == "invoke_agent":
-            return _tool_invoke_agent(self._agents_dir, args)
+            return _tool_invoke_agent(
+                self._agents_dir, args,
+                context_builder=self._context_builder,
+                memory_store=self._memory_store,
+                semantic_enabled=self._semantic_enabled,
+                cfg=self._cfg,
+            )
         if name == "search_memory":
-            return _tool_search_memory(self._agents_dir, self._shared_dir, args)
+            return _tool_search_memory(
+                self._agents_dir, self._shared_dir, args,
+                memory_store=self._memory_store,
+                semantic_enabled=self._semantic_enabled,
+            )
         if name == "append_note":
             return _tool_append_note(self._agents_dir, args)
         return f"Unknown tool: {name}"

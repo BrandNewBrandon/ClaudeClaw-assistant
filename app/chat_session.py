@@ -94,7 +94,10 @@ class TerminalChatSession:
             effort=self._app_config.claude_effort,
         )
         self._context_builder = ContextBuilder(agents_dir=agents_dir)
-        self._memory = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+        self._memory = MemoryStore(
+            shared_dir=shared_dir, agents_dir=agents_dir,
+            embedding_model=self._app_config.embedding_model,
+        )
         self._runtime_state = RuntimeState()
         self._runtime_state.set_active_agent(self._agent_name, account_id=ACCOUNT_ID)
 

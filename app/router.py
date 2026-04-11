@@ -211,7 +211,11 @@ class AssistantRouter:
         self._model_runner = self._build_model_runner()
         self._model_runner.ensure_available()
         self._context_builder = ContextBuilder(agents_dir=self._config.agents_dir)
-        self._memory = MemoryStore(shared_dir=self._config.shared_dir, agents_dir=self._config.agents_dir)
+        self._memory = MemoryStore(
+            shared_dir=self._config.shared_dir,
+            agents_dir=self._config.agents_dir,
+            embedding_model=self._config.embedding_model,
+        )
         self._sessions = SessionStore(shared_dir=self._config.shared_dir)
         self._pairing = PairingStore(get_state_dir()) if self._config.pairing_enabled else None
         self._extra_allowed: dict[str, set[str]] = defaultdict(set)  # account_id -> {chat_ids added via pairing}
