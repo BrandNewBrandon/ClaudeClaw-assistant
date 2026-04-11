@@ -33,6 +33,7 @@ class MemoryStore:
         self._agents_dir = agents_dir
         self._embedding_model = embedding_model
         self._embedding_indices: dict[str, "EmbeddingIndex"] = {}  # agent -> index
+        self._write_lock = threading.Lock()
 
     def long_term_memory_path(self, agent: str) -> Path:
         return self._agents_dir / agent / "MEMORY.md"
@@ -146,8 +147,9 @@ class MemoryStore:
             metadata=metadata or {},
         )
 
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(asdict(entry), ensure_ascii=False) + "\n")
+        with self._write_lock:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(asdict(entry), ensure_ascii=False) + "\n")
 
     def append_compaction_summary(
         self,
@@ -363,10 +365,11 @@ class MemoryStore:
         agent_memory_dir.mkdir(parents=True, exist_ok=True)
         path = agent_memory_dir / f"{self._today_string()}.md"
 
-        with path.open("a", encoding="utf-8") as handle:
-            if path.exists() and path.stat().st_size > 0:
-                handle.write("\n\n")
-            handle.write(f"## {self._now_human()}\n{note}\n")
+        with self._write_lock:
+            with path.open("a", encoding="utf-8") as handle:
+                if path.exists() and path.stat().st_size > 0:
+                    handle.write("\n\n")
+                handle.write(f"## {self._now_human()}\n{note}\n")
 
         # Incrementally update the embedding index if available
         try:

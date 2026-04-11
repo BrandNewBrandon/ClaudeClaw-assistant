@@ -166,3 +166,34 @@ def test_search_transcript_respects_limit(tmp_path: Path) -> None:
         store.append_transcript(surface="telegram", chat_id="c1", direction="in", agent="main", message_text=f"match {i}")
     results = store.search_transcript("telegram", "c1", "match", agent_name="main", limit=5)
     assert len(results) == 5
+
+
+def test_concurrent_transcript_writes(tmp_path: Path) -> None:
+    """Concurrent writes should not corrupt the transcript file."""
+    import threading
+    shared_dir = tmp_path / "shared"
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir(parents=True)
+    store = MemoryStore(shared_dir=shared_dir, agents_dir=agents_dir)
+
+    errors: list[Exception] = []
+
+    def writer(n: int) -> None:
+        try:
+            for i in range(20):
+                store.append_transcript(
+                    surface="telegram", chat_id="c1", direction="in",
+                    agent="main", message_text=f"thread-{n}-msg-{i}",
+                )
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(errors) == 0
+    entries = store.read_recent_transcript("telegram", "c1", limit=200, agent_name="main")
+    assert len(entries) == 80  # 4 threads × 20 messages
