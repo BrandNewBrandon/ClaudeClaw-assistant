@@ -667,7 +667,11 @@ class CommandHandler:
             for job in jobs:
                 status_icon = {"pending": "⏳", "running": "▶️", "completed": "✅", "failed": "❌", "cancelled": "🚫"}.get(job.status, "?")
                 preview = job.prompt[:60] + ("…" if len(job.prompt) > 60 else "")
-                lines.append(f"  {status_icon} [{job.id}] {job.status} — {preview}")
+                recur = ""
+                if hasattr(job, 'recurrence_seconds') and job.recurrence_seconds:
+                    rh = job.recurrence_seconds / 3600
+                    recur = f" [every {rh:.0f}h]" if rh < 24 else f" [every {rh/24:.0f}d]"
+                lines.append(f"  {status_icon} [{job.id}] {job.status}{recur} — {preview}")
             return ("\n".join(lines), None, False, None)
 
         # ── /job <id> or /job cancel <id> ────────────────────────────────────
@@ -759,6 +763,48 @@ class CommandHandler:
                     lines.append(f"  {key}: {value}")
             return ("\n".join(lines), None, False, None)
 
+        # ── /every <interval> <prompt> ───────────────────────────────────────
+        if stripped == "/every" or stripped.startswith("/every "):
+            parts = stripped.split(maxsplit=2)
+            if len(parts) < 3 or not parts[2].strip():
+                return ("Usage: /every <interval> <prompt>\nIntervals: 1h, 6h, 12h, 24h, 7d\nExample: /every 24h check my github notifications", None, False, None)
+            interval_str, prompt = parts[1].strip(), parts[2].strip()
+            if self._job_store is None:
+                return ("Background jobs not available.", None, False, None)
+
+            # Parse interval
+            interval_map = {
+                "1h": 3600, "2h": 7200, "3h": 10800, "4h": 14400,
+                "6h": 21600, "8h": 28800, "12h": 43200,
+                "24h": 86400, "1d": 86400, "2d": 172800, "7d": 604800,
+            }
+            seconds = interval_map.get(interval_str.lower())
+            if seconds is None:
+                # Try parsing as Nh or Nd
+                import re as _re
+                m = _re.match(r"^(\d+)(h|d)$", interval_str.lower())
+                if m:
+                    num, unit = int(m.group(1)), m.group(2)
+                    seconds = num * 3600 if unit == "h" else num * 86400
+                else:
+                    return (f"Invalid interval: {interval_str}. Use format like 1h, 6h, 24h, 7d.", None, False, None)
+
+            job_id = self._job_store.create_job(
+                chat_id=chat_id or "",
+                account_id=account_id or "primary",
+                surface=surface,
+                agent=active_agent,
+                prompt=prompt,
+                recurrence_seconds=seconds,
+            )
+
+            hours = seconds / 3600
+            if hours >= 24:
+                interval_label = f"{hours / 24:.0f} day(s)"
+            else:
+                interval_label = f"{hours:.0f} hour(s)"
+            return (f"Recurring job created [{job_id}]. Runs every {interval_label}.\nFirst run starting now.", None, False, None)
+
         # ── /help ─────────────────────────────────────────────────────────────
         if stripped == "/help":
             skill_commands: list[str] = []
@@ -795,6 +841,7 @@ class CommandHandler:
                     "/briefing set <HH> [HH …] — set briefing times (e.g. /briefing set 9 18)",
                     "/briefing add <HH> / remove <HH> — add or remove a briefing time",
                     "/bg <prompt> — run a prompt in the background",
+                    "/every <interval> <prompt> — run a recurring background job (e.g. /every 24h check PRs)",
                     "/jobs — list background jobs",
                     "/job <id> — show job status and result",
                     "/job cancel <id> — cancel a job",

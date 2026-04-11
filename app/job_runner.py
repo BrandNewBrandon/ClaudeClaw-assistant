@@ -161,6 +161,14 @@ class JobRunner:
             output = last_output or "(no response)"
             self._store.complete_job(job_id, result=output)
             self._deliver(surface, chat_id, f"Background job [{job_id}] completed:\n\n{output}")
+            # Auto-reschedule recurring jobs
+            completed_job = self._store.get_job(job_id)
+            if completed_job and completed_job.recurrence_seconds:
+                self._store.create_job(
+                    chat_id=chat_id, account_id=account_id,
+                    surface=surface, agent=agent, prompt=prompt,
+                    recurrence_seconds=completed_job.recurrence_seconds,
+                )
         except Exception as exc:
             error_msg = str(exc)
             self._store.fail_job(job_id, error=error_msg)

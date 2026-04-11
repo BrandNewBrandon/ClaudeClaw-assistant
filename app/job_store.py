@@ -25,6 +25,7 @@ class Job:
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    recurrence_seconds: int | None
 
 
 class JobStore:
@@ -57,20 +58,26 @@ class JobStore:
                         error TEXT,
                         created_at TEXT NOT NULL,
                         started_at TEXT,
-                        completed_at TEXT
+                        completed_at TEXT,
+                        recurrence_seconds INTEGER
                     )
                 """)
                 conn.commit()
+                # Migration: add recurrence_seconds column if it doesn't exist
+                cols = [row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()]
+                if "recurrence_seconds" not in cols:
+                    conn.execute("ALTER TABLE jobs ADD COLUMN recurrence_seconds INTEGER")
+                    conn.commit()
 
-    def create_job(self, *, chat_id: str, account_id: str, surface: str, agent: str, prompt: str) -> str:
+    def create_job(self, *, chat_id: str, account_id: str, surface: str, agent: str, prompt: str, recurrence_seconds: int | None = None) -> str:
         job_id = str(uuid.uuid4())[:8]
         now = datetime.now(tz=timezone.utc).isoformat()
         with self._lock:
             with self._connect() as conn:
                 conn.execute(
-                    "INSERT INTO jobs (id, chat_id, account_id, surface, agent, prompt, status, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
-                    (job_id, chat_id, account_id, surface, agent, prompt, now),
+                    "INSERT INTO jobs (id, chat_id, account_id, surface, agent, prompt, status, created_at, recurrence_seconds) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+                    (job_id, chat_id, account_id, surface, agent, prompt, now, recurrence_seconds),
                 )
                 conn.commit()
         return job_id
@@ -187,4 +194,5 @@ class JobStore:
             created_at=JobStore._parse_dt(str(row["created_at"])) or datetime.now(tz=timezone.utc),
             started_at=JobStore._parse_dt(row["started_at"]),
             completed_at=JobStore._parse_dt(row["completed_at"]),
+            recurrence_seconds=int(row["recurrence_seconds"]) if row["recurrence_seconds"] is not None else None,
         )
