@@ -245,3 +245,31 @@ def test_store_observation_allows_different_content(tmp_path: Path) -> None:
 
     observations = store.load_observations("main")
     assert len(observations) == 2
+
+
+def test_find_relevant_memory_budgeted_respects_token_limit(tmp_path: Path) -> None:
+    agents_dir = tmp_path / "agents"
+    agent_dir = agents_dir / "main"
+    memory_dir = agent_dir / "memory"
+    memory_dir.mkdir(parents=True)
+
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=agents_dir)
+    for i in range(10):
+        obs = Observation(
+            type=ObservationType.DISCOVERY,
+            title=f"Fact {i}",
+            narrative=f"This is fact number {i} with some detail. " * 5,
+            facts=[f"detail {i}"],
+        )
+        store.store_observation("main", obs)
+
+    small = store.find_relevant_memory_budgeted("main", "fact", token_budget=100)
+    large = store.find_relevant_memory_budgeted("main", "fact", token_budget=2000)
+    assert len(small) < len(large)
+    assert len(small) >= 1
+
+
+def test_find_relevant_memory_budgeted_returns_empty_when_no_observations(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    result = store.find_relevant_memory_budgeted("main", "anything", token_budget=1000)
+    assert result == []

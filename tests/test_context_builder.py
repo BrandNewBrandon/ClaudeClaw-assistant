@@ -129,3 +129,15 @@ def test_load_agent_context_uses_cache_on_second_call(tmp_path: Path) -> None:
 
     ctx2 = builder.load_agent_context("main")
     assert ctx2.agent_md == "agent persona"  # served from cache
+
+
+def test_format_relevant_memory_respects_content(tmp_path: Path) -> None:
+    """Relevant memory block renders all provided snippets."""
+    builder = ContextBuilder(tmp_path)
+    snippets = [
+        "**decision**: Use flat files\nKeep it simple.",
+        "**discovery**: User prefers terse output\nNo essays.",
+    ]
+    result = builder._format_relevant_memory(snippets)
+    assert "flat files" in result
+    assert "terse output" in result

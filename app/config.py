@@ -70,6 +70,8 @@ class AppConfig:
     session_idle_reset_minutes: int | None = None
     # Auto-memory extraction
     auto_memory: bool = False
+    # Token budget for relevant memory injection
+    memory_token_budget: int = 800
 
 
 class ConfigError(Exception):
@@ -302,4 +304,5 @@ def load_config(config_path: str | Path) -> AppConfig:
         session_reset_daily_hour=_session_reset_daily_hour,
         session_idle_reset_minutes=int(raw.get("session_idle_reset_minutes")) if raw.get("session_idle_reset_minutes") is not None else None,
         auto_memory=bool(raw.get("auto_memory", False)),
+        memory_token_budget=int(raw.get("memory_token_budget", 800)),
     )

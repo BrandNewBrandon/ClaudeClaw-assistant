@@ -445,6 +445,55 @@ class MemoryStore:
             observations = observations[:limit]
         return observations
 
+    def find_relevant_memory_budgeted(
+        self,
+        agent: str,
+        query: str,
+        *,
+        token_budget: int = 800,
+        semantic: bool = True,
+    ) -> list[str]:
+        """Find relevant memory snippets that fit within a token budget.
+
+        Returns observation markdown strings, most relevant first, until
+        the budget is exhausted. Falls back to the original find_relevant_memory
+        if no observations exist.
+        """
+        observations = self.load_observations(agent)
+        if not observations:
+            return self.find_relevant_memory(agent, query, limit=4, semantic=semantic)
+
+        candidates: list[str] = []
+        if semantic:
+            try:
+                index = self._get_embedding_index(agent)
+                if index.size > 0:
+                    candidates = index.query(query, limit=20)
+            except Exception:
+                pass
+
+        if not candidates:
+            query_terms = self._keyword_terms(query)
+            scored: list[tuple[int, Observation]] = []
+            for obs in observations:
+                text = obs.to_markdown().lower()
+                score = sum(1 for t in query_terms if t in text)
+                if score > 0:
+                    scored.append((score, obs))
+            scored.sort(key=lambda x: -x[0])
+            candidates = [obs.to_markdown() for _, obs in scored]
+
+        result: list[str] = []
+        tokens_used = 0
+        for snippet in candidates:
+            est = max(1, len(snippet) // 4)
+            if tokens_used + est > token_budget and result:
+                break
+            result.append(snippet)
+            tokens_used += est
+
+        return result
+
     def _daily_notes_dir(self, agent: str) -> Path:
         return self._agents_dir / agent / "memory"
 

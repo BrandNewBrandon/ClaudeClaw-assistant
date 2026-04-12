@@ -657,10 +657,10 @@ class AssistantRouter:
                 return
 
         if self._commands.is_command(message.text):
-            memory_preview = self._memory.find_relevant_memory(
+            memory_preview = self._memory.find_relevant_memory_budgeted(
                 active_agent,
                 message.text,
-                limit=4,
+                token_budget=self._config.memory_token_budget,
                 semantic=self._config.semantic_search_enabled,
             )
             reply, switch_agent_to, reset_chat, remember_text = self._commands.handle(
@@ -787,10 +787,10 @@ class AssistantRouter:
             if len(recent_transcript) > 20:
                 recent_transcript = recent_transcript[-20:]
 
-            relevant_memory = self._memory.find_relevant_memory(
+            relevant_memory = self._memory.find_relevant_memory_budgeted(
                 active_agent,
                 message.text,
-                limit=4,
+                token_budget=self._config.memory_token_budget,
                 semantic=self._config.semantic_search_enabled,
             )
             working_dir = self._resolve_working_directory(active_agent)
