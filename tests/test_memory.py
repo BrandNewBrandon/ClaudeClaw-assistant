@@ -344,3 +344,20 @@ def test_consolidate_falls_back_on_non_json(tmp_path: Path) -> None:
     assert "Consolidated" in result
     memory_content = (agents_dir / "main" / "MEMORY.md").read_text(encoding="utf-8")
     assert "Python" in memory_content
+
+
+def test_memory_sources_includes_observations(tmp_path: Path) -> None:
+    agents_dir = tmp_path / "agents"
+    (agents_dir / "main" / "memory").mkdir(parents=True)
+
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=agents_dir)
+    obs = Observation(
+        type=ObservationType.DECISION,
+        title="Use token budgeting",
+        narrative="Memory injection now respects token budgets.",
+    )
+    store.store_observation("main", obs)
+
+    sources = store._memory_sources("main")
+    joined = "\n".join(sources)
+    assert "token budget" in joined.lower()

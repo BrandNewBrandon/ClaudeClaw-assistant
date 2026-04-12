@@ -525,6 +525,12 @@ class MemoryStore:
         if long_term_memory:
             sources.append(long_term_memory)
 
+        # Include stored observations
+        observations = self.load_observations(agent, limit=50)
+        if observations:
+            obs_text = "\n\n".join(obs.to_markdown() for obs in observations)
+            sources.append(obs_text)
+
         memory_dir = self._daily_notes_dir(agent)
         if memory_dir.exists():
             for path in sorted(memory_dir.glob("*.md"), reverse=True)[:3]:
