@@ -910,13 +910,13 @@ class AssistantRouter:
         if self._config.auto_memory and reply and not is_silent:
             try:
                 from .auto_memory import extract_and_save
-                agent_notes_dir = self._config.agents_dir / active_agent / "memory"
                 extract_and_save(
                     message.text or "",
                     reply,
                     model_runner=self._model_runner,
                     working_directory=self._config.project_root,
-                    notes_dir=agent_notes_dir,
+                    memory_store=self._memory,
+                    agent=active_agent,
                 )
             except Exception:
                 LOGGER.debug("Auto-memory dispatch failed", exc_info=True)
