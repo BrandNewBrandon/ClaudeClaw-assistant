@@ -1447,11 +1447,37 @@ def _cmd_update(project_root: Path) -> int:
         print(f"  Expected: {project_root}/.git")
         return 1
 
+    # Capture current HEAD before pulling
+    before_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(project_root),
+        capture_output=True, text=True,
+    ).stdout.strip()
+
     print("Pulling latest code from GitHub...")
     result = subprocess.run(["git", "pull"], cwd=str(project_root))
     if result.returncode != 0:
         print("Error: git pull failed. Check your internet connection and try again.")
         return result.returncode
+
+    # Show what changed
+    after_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(project_root),
+        capture_output=True, text=True,
+    ).stdout.strip()
+
+    if before_sha == after_sha:
+        print("\nAlready up to date.")
+    else:
+        print(f"\nUpdated {before_sha[:8]} → {after_sha[:8]}:")
+        subprocess.run(
+            ["git", "log", "--oneline", f"{before_sha}..{after_sha}"],
+            cwd=str(project_root),
+        )
+        # Show file-level summary
+        subprocess.run(
+            ["git", "diff", "--stat", before_sha, after_sha],
+            cwd=str(project_root),
+        )
 
     print("\nUpdating dependencies...")
     pip_cmd = str(venv_pip) if venv_pip.exists() else "pip"
