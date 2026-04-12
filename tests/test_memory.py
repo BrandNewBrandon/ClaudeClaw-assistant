@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.memory import MemoryStore
+from app.observations import Observation, ObservationType
 
 
 def test_memory_store_reads_long_term_memory_file(tmp_path: Path) -> None:
@@ -197,3 +198,50 @@ def test_concurrent_transcript_writes(tmp_path: Path) -> None:
     assert len(errors) == 0
     entries = store.read_recent_transcript("telegram", "c1", limit=200, agent_name="main")
     assert len(entries) == 80  # 4 threads × 20 messages
+
+
+def test_store_observation_writes_jsonl(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    (tmp_path / "agents" / "main" / "memory").mkdir(parents=True)
+
+    obs = Observation(
+        type=ObservationType.DECISION,
+        title="Use flat files",
+        narrative="Decided to keep flat file storage.",
+        facts=["Simple", "No deps"],
+    )
+    stored = store.store_observation("main", obs)
+    assert stored is True
+
+    observations = store.load_observations("main")
+    assert len(observations) == 1
+    assert observations[0].title == "Use flat files"
+
+
+def test_store_observation_deduplicates(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    (tmp_path / "agents" / "main" / "memory").mkdir(parents=True)
+
+    obs = Observation(
+        type=ObservationType.BUGFIX,
+        title="Fix timeout",
+        narrative="Increased timeout.",
+    )
+    assert store.store_observation("main", obs) is True
+    assert store.store_observation("main", obs) is False  # duplicate
+
+    observations = store.load_observations("main")
+    assert len(observations) == 1
+
+
+def test_store_observation_allows_different_content(tmp_path: Path) -> None:
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
+    (tmp_path / "agents" / "main" / "memory").mkdir(parents=True)
+
+    obs1 = Observation(type=ObservationType.FEATURE, title="Add A", narrative="Added A")
+    obs2 = Observation(type=ObservationType.FEATURE, title="Add B", narrative="Added B")
+    assert store.store_observation("main", obs1) is True
+    assert store.store_observation("main", obs2) is True
+
+    observations = store.load_observations("main")
+    assert len(observations) == 2

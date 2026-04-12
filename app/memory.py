@@ -5,6 +5,7 @@ import logging
 import re
 import threading
 from dataclasses import asdict, dataclass
+from .observations import Observation, observation_from_dict, observation_to_dict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -389,6 +390,60 @@ class MemoryStore:
             pass  # semantic indexing is best-effort
 
         return path
+
+    def _observations_path(self, agent: str) -> Path:
+        return self._agents_dir / agent / "memory" / "observations.jsonl"
+
+    def store_observation(self, agent: str, obs: Observation) -> bool:
+        """Store an observation. Returns False if duplicate (same content_hash)."""
+        path = self._observations_path(agent)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content_hash = obs.content_hash
+
+        # Check for duplicates
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    existing = json.loads(line)
+                    if existing.get("content_hash") == content_hash:
+                        return False
+                except json.JSONDecodeError:
+                    continue
+
+        with self._write_lock:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(observation_to_dict(obs), ensure_ascii=False) + "\n")
+
+        # Update embedding index
+        try:
+            index = self._get_embedding_index(agent)
+            index.add_snippet("observation", obs.to_markdown())
+        except Exception:
+            pass
+
+        return True
+
+    def load_observations(self, agent: str, *, limit: int = 0) -> list[Observation]:
+        """Load observations from JSONL. Returns newest first. limit=0 means all."""
+        path = self._observations_path(agent)
+        if not path.exists():
+            return []
+
+        observations: list[Observation] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                observations.append(observation_from_dict(json.loads(line)))
+            except (json.JSONDecodeError, KeyError, ValueError):
+                LOGGER.warning("Skipping malformed observation in %s", path)
+
+        observations.reverse()  # newest first
+        if limit > 0:
+            observations = observations[:limit]
+        return observations
 
     def _daily_notes_dir(self, agent: str) -> Path:
         return self._agents_dir / agent / "memory"
