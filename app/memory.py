@@ -334,9 +334,13 @@ class MemoryStore:
 
         prompt = (
             f"The following are daily conversation notes for agent '{agent}'. "
-            "Extract the key facts, decisions, preferences, and important information that should be "
-            "remembered long-term. Return ONLY a compact markdown bullet list of facts — "
-            "no preamble, no dates, no timestamps. Each bullet should be a concise, standalone fact.\n\n"
+            "Analyze these conversations and return a JSON object summarizing them:\n\n"
+            '  "request": what the user was trying to accomplish\n'
+            '  "learned": key facts, decisions, or preferences discovered\n'
+            '  "completed": what was actually done or resolved\n'
+            '  "next_steps": what the user might want to do next (or null)\n\n'
+            "Return ONLY the JSON object. If there are multiple distinct topics, "
+            "include all of them in each field.\n\n"
             f"{combined_text}"
         )
 
@@ -354,10 +358,28 @@ class MemoryStore:
         if not extracted:
             return "No facts extracted from notes."
 
+        # Try to parse as structured JSON; fall back to raw text
+        structured = None
+        try:
+            structured = json.loads(extracted)
+        except json.JSONDecodeError:
+            pass
+
         memory_path = self.long_term_memory_path(agent)
         memory_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if structured and isinstance(structured, dict):
+            lines = [f"\n\n## Session Summary — {self._now_human()}"]
+            for key in ("request", "learned", "completed", "next_steps"):
+                value = structured.get(key)
+                if value:
+                    lines.append(f"- **{key.replace('_', ' ').title()}:** {value}")
+            block = "\n".join(lines) + "\n"
+        else:
+            block = f"\n\n## Consolidated {self._now_human()}\n{extracted}\n"
+
         with memory_path.open("a", encoding="utf-8") as fh:
-            fh.write(f"\n\n## Consolidated {self._now_human()}\n{extracted}\n")
+            fh.write(block)
 
         archive_dir = memory_dir / "archived"
         archive_dir.mkdir(exist_ok=True)

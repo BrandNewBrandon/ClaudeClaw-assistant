@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json as _json
 from pathlib import Path
 
 from app.memory import MemoryStore
@@ -273,3 +274,73 @@ def test_find_relevant_memory_budgeted_returns_empty_when_no_observations(tmp_pa
     store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=tmp_path / "agents")
     result = store.find_relevant_memory_budgeted("main", "anything", token_budget=1000)
     assert result == []
+
+
+def test_consolidate_produces_structured_summary(tmp_path: Path) -> None:
+    agents_dir = tmp_path / "agents"
+    memory_dir = agents_dir / "main" / "memory"
+    memory_dir.mkdir(parents=True)
+
+    from datetime import datetime, timedelta
+    old_date = (datetime.now().astimezone() - timedelta(days=5)).strftime("%Y-%m-%d")
+    (memory_dir / f"{old_date}.md").write_text(
+        "## 10:00\nUser: How do I add multi-account?\n\nAssistant: You need to...",
+        encoding="utf-8",
+    )
+
+    structured_response = _json.dumps({
+        "request": "How to add multi-account support",
+        "learned": "User needs multi-account routing for Telegram",
+        "completed": "Explained the multi-account architecture",
+        "next_steps": "User may implement multi-account routing next",
+    })
+
+    class FakeRunner:
+        def run_prompt(self, prompt, working_directory, **kwargs):
+            from dataclasses import dataclass
+            @dataclass
+            class R:
+                stdout: str
+                stderr: str = ""
+                exit_code: int = 0
+                session_id: str | None = None
+            return R(stdout=structured_response)
+
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=agents_dir)
+    result = store.consolidate_agent_notes(
+        "main", FakeRunner(), tmp_path, keep_days=3
+    )
+
+    assert "Consolidated" in result
+    memory_content = (agents_dir / "main" / "MEMORY.md").read_text(encoding="utf-8")
+    assert "multi-account" in memory_content.lower()
+    assert "Learned" in memory_content or "learned" in memory_content
+
+
+def test_consolidate_falls_back_on_non_json(tmp_path: Path) -> None:
+    """If the model returns plain bullets instead of JSON, still works."""
+    agents_dir = tmp_path / "agents"
+    memory_dir = agents_dir / "main" / "memory"
+    memory_dir.mkdir(parents=True)
+
+    from datetime import datetime, timedelta
+    old_date = (datetime.now().astimezone() - timedelta(days=5)).strftime("%Y-%m-%d")
+    (memory_dir / f"{old_date}.md").write_text("## Old note\nSome conversation.", encoding="utf-8")
+
+    class FakeRunner:
+        def run_prompt(self, prompt, working_directory, **kwargs):
+            from dataclasses import dataclass
+            @dataclass
+            class R:
+                stdout: str
+                stderr: str = ""
+                exit_code: int = 0
+                session_id: str | None = None
+            return R(stdout="- User likes Python\n- Prefers terse output")
+
+    store = MemoryStore(shared_dir=tmp_path / "shared", agents_dir=agents_dir)
+    result = store.consolidate_agent_notes("main", FakeRunner(), tmp_path, keep_days=3)
+
+    assert "Consolidated" in result
+    memory_content = (agents_dir / "main" / "MEMORY.md").read_text(encoding="utf-8")
+    assert "Python" in memory_content
