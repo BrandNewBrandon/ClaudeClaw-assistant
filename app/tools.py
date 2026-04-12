@@ -375,6 +375,12 @@ def execute_shell_command(command: str, *, cwd: str | None = None) -> str:
 
 def _run_command(arguments: dict[str, Any], *, cwd: str | None = None) -> str:
     command = _require_string(arguments, "command")
+    # Allow longer timeout for package install commands
+    timeout = 60
+    _cmd_lower = command.lower()
+    if any(k in _cmd_lower for k in ("pip install", "npm install", "cargo install",
+                                      "apt install", "brew install", "choco install")):
+        timeout = 300
     try:
         result = subprocess.run(
             command,
@@ -383,12 +389,12 @@ def _run_command(arguments: dict[str, Any], *, cwd: str | None = None) -> str:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=60,
+            timeout=timeout,
             cwd=cwd,
             env={**os.environ},
         )
     except subprocess.TimeoutExpired:
-        raise ToolError("Command timed out after 60 seconds.")
+        raise ToolError(f"Command timed out after {timeout} seconds.")
     except OSError as exc:
         raise ToolError(f"Failed to run command: {exc}")
 
@@ -396,8 +402,22 @@ def _run_command(arguments: dict[str, Any], *, cwd: str | None = None) -> str:
     if result.stdout.strip():
         output_parts.append(result.stdout.strip())
     if result.stderr.strip():
-        output_parts.append(f"[stderr]\n{result.stderr.strip()}")
+        stderr = result.stderr.strip()
+        # For failed builds, keep only the last portion — the actual error
+        # messages. Rust/C++ compilers emit thousands of lines before the
+        # real error; shipping all of it confuses the model and can exceed
+        # message limits.
+        if result.returncode != 0:
+            stderr_lines = stderr.splitlines()
+            if len(stderr_lines) > 30:
+                stderr = "\n".join(
+                    ["...[earlier output truncated]"] + stderr_lines[-30:]
+                )
+        output_parts.append(f"[stderr]\n{stderr}")
     output = "\n".join(output_parts)
+    # Strip non-printable / garbled bytes that confuse the model (common in
+    # Rust/C++ build output on Windows where emoji bytes get double-decoded).
+    output = re.sub(r"[^\x20-\x7E\n\r\t]", "", output)
     if len(output) > 4000:
         output = output[:4000].rstrip() + "\n...[truncated]"
     exit_info = f"\n[exit code {result.returncode}]" if result.returncode != 0 else ""

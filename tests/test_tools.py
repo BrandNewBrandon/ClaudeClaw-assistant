@@ -102,3 +102,64 @@ def test_list_processes_filter_no_match_returns_message() -> None:
     ))
     assert result.ok is True
     assert "no processes" in result.output.lower()
+
+
+def test_run_command_truncates_stderr_on_failure() -> None:
+    """Failed commands with huge stderr should be truncated to last 30 lines."""
+    from unittest.mock import patch, MagicMock
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 1
+    fake.stdout = ""
+    # 50 lines of compiler noise + the real error at the end
+    fake.stderr = "\n".join([f"  Compiling crate-{i} v0.1.0" for i in range(50)]
+                            + ["error: linker `link.exe` not found"])
+
+    with patch("app.tools.subprocess.run", return_value=fake):
+        output = _run_command({"command": "pip install broken-pkg"})
+
+    assert "earlier output truncated" in output
+    assert "linker" in output
+    # Should NOT contain the first compiler lines
+    assert "crate-0" not in output
+    assert "[exit code 1]" in output
+
+
+def test_run_command_strips_non_ascii() -> None:
+    """Garbled emoji bytes from Rust/maturin builds should be stripped."""
+    from unittest.mock import patch, MagicMock
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 0
+    fake.stdout = "Hello \xf0\x9f\x93\xa6 world"  # raw bytes decoded as latin1
+    fake.stderr = ""
+
+    with patch("app.tools.subprocess.run", return_value=fake):
+        output = _run_command({"command": "echo test"})
+
+    # Non-ASCII bytes should be stripped, leaving clean text
+    assert "Hello" in output
+    assert "world" in output
+    # No garbled bytes
+    assert all(ord(c) < 128 or c in "\n\r\t" for c in output)
+
+
+def test_run_command_uses_longer_timeout_for_pip() -> None:
+    """pip install should get a 300s timeout, not 60s."""
+    from unittest.mock import patch, MagicMock, call
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 0
+    fake.stdout = "Successfully installed foo"
+    fake.stderr = ""
+
+    with patch("app.tools.subprocess.run", return_value=fake) as mock_run:
+        _run_command({"command": "pip install some-package"})
+        assert mock_run.call_args[1]["timeout"] == 300
+
+    with patch("app.tools.subprocess.run", return_value=fake) as mock_run:
+        _run_command({"command": "echo hello"})
+        assert mock_run.call_args[1]["timeout"] == 60

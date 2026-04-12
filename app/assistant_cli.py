@@ -1478,6 +1478,15 @@ def _cmd_update(project_root: Path) -> int:
 
     print("\nUpdating dependencies...")
     pip_cmd = str(venv_pip) if venv_pip.exists() else "pip"
+
+    # Clean up broken build artifacts from failed native-extension installs
+    # (e.g. Rust/C++ packages that failed mid-compile and left partial state).
+    print("  Cleaning build cache...")
+    subprocess.run(
+        [pip_cmd, "cache", "purge"],
+        capture_output=True, timeout=30,
+    )
+
     result = subprocess.run([pip_cmd, "install", "--quiet", "-e", f"{project_root}[all]"])
     if result.returncode != 0:
         print("Error: dependency update failed.")
