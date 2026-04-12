@@ -1342,8 +1342,8 @@ def _cmd_hatch(project_root: Path, agent_name: str | None = None) -> int:
     print("  Hatching your agent...")
     print(f"  Agent: {name}")
     print(f"  This is a first-run conversation where you and your agent")
-    print(f"  figure out who it is together. When you're done, it will")
-    print(f"  delete BOOTSTRAP.md and become its own thing.")
+    print(f"  figure out who it is together. BOOTSTRAP.md will be")
+    print(f"  removed automatically when the session ends.")
     print()
     print("  Type 'quit' or Ctrl-C to exit.")
     print()
@@ -1360,15 +1360,12 @@ def _cmd_hatch(project_root: Path, agent_name: str | None = None) -> int:
         print(f"Error: {exc}")
         return 1
 
-    # Check if bootstrap was deleted during the conversation
-    if not bootstrap_path.exists():
-        print()
-        print(f"  Your agent '{name}' has hatched! BOOTSTRAP.md was deleted.")
-        print(f"  Run 'assistant start' to go live, or 'assistant chat' to keep talking.")
-    else:
-        print()
-        print(f"  Session ended. BOOTSTRAP.md still exists — the agent hasn't fully hatched yet.")
-        print(f"  Run 'assistant hatch' again to continue.")
+    # Clean up bootstrap — agent is hatched whether or not it deleted the file itself
+    if bootstrap_path.exists():
+        bootstrap_path.unlink()
+    print()
+    print(f"  Your agent '{name}' has hatched! BOOTSTRAP.md removed.")
+    print(f"  Run 'assistant start' to go live, or 'assistant chat' to keep talking.")
     print()
     return 0
 
