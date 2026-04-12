@@ -4,6 +4,7 @@ config/config.json
 *.secret
 
 # Personal agent data
+agents/
 archived_agents/
 
 # Python
