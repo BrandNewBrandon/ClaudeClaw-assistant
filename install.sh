@@ -174,7 +174,7 @@ fi
 step "Step 4 — Installing ClaudeClaw"
 
 "$VENV/bin/pip" install --quiet --upgrade pip
-"$VENV/bin/pip" install --quiet -e "$PROJECT_ROOT"
+"$VENV/bin/pip" install --quiet -e "$PROJECT_ROOT[all]"
 ok "Installed ClaudeClaw (editable mode)"
 
 # ── Step 5: Add to PATH ──────────────────────────────────────────────────────

@@ -194,7 +194,7 @@ if ((Test-Path $Venv) -and (Test-Path $VenvPython)) {
 Write-Step "Step 4 - Installing ClaudeClaw"
 
 & $VenvPython -m pip install --quiet --upgrade pip
-& $VenvPython -m pip install --quiet -e $ProjectRoot
+& $VenvPython -m pip install --quiet -e "$ProjectRoot[all]"
 Write-Ok "Installed ClaudeClaw (editable mode)"
 
 # -- Step 5: Add to PATH ------------------------------------------------------

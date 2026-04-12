@@ -1478,7 +1478,7 @@ def _cmd_update(project_root: Path) -> int:
 
     print("\nUpdating dependencies...")
     pip_cmd = str(venv_pip) if venv_pip.exists() else "pip"
-    result = subprocess.run([pip_cmd, "install", "--quiet", "-e", str(project_root)])
+    result = subprocess.run([pip_cmd, "install", "--quiet", "-e", f"{project_root}[all]"])
     if result.returncode != 0:
         print("Error: dependency update failed.")
         return result.returncode
