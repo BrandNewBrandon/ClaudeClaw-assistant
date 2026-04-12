@@ -1332,6 +1332,10 @@ class AssistantRouter:
                     _itr[0] = True
                 if _itr[0]:
                     return
+                # Suppress streaming for __SILENT__ token
+                stripped = accumulated.strip()
+                if stripped and "__SILENT__".startswith(stripped):
+                    return
                 # Throttle edits to max 1 per 300 ms; first chunk always sends immediately
                 now = time.monotonic()
                 if message_id_box[0] is None or now - _let[0] >= 0.3:
