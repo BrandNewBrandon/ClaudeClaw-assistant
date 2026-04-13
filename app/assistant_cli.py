@@ -1575,23 +1575,82 @@ def _cmd_logs(lines: int = 50, follow: bool = True) -> int:
     return 0
 
 
-def _open_log_tail_window(log_path: Path) -> bool:
-    """Spawn a separate terminal window tailing runtime.log live.
+_LOG_TAIL_TITLE = "ClaudeClaw Runtime Logs"
 
-    Returns True on success. Silently returns False on unsupported platforms
-    or if launching the terminal fails — log tailing is a convenience, not a
-    hard requirement, so callers should not treat a failure as fatal.
+
+def _close_existing_log_tail_window() -> None:
+    """Best-effort: close any previously-opened runtime-log tail window.
+
+    Called before opening a new one so `assistant restart` doesn't stack up
+    multiple tail windows pointing at the same log file. Silent on failure —
+    a leftover window is ugly but harmless.
     """
-    log_path_str = str(log_path)
-    title = "ClaudeClaw — Runtime Logs"
     try:
         if sys.platform == "darwin":
             script = (
                 f'tell application "Terminal"\n'
+                f'  set windowList to every window\n'
+                f'  repeat with w in windowList\n'
+                f'    try\n'
+                f'      if (custom title of w) is "{_LOG_TAIL_TITLE}" then\n'
+                f'        close w saving no\n'
+                f'      end if\n'
+                f'    end try\n'
+                f'  end repeat\n'
+                f'end tell'
+            )
+            subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+            return
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/FI", f'WINDOWTITLE eq {_LOG_TAIL_TITLE}*'],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+            return
+        # Linux: match window title via wmctrl if available; otherwise skip
+        try:
+            subprocess.run(
+                ["wmctrl", "-c", _LOG_TAIL_TITLE],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+        except FileNotFoundError:
+            pass
+    except Exception:
+        return
+
+
+def _open_log_tail_window(log_path: Path) -> bool:
+    """Spawn a separate terminal window tailing runtime.log live.
+
+    Closes any existing runtime-log tail window first so restarts don't stack
+    up duplicates. Returns True on success. Silently returns False on
+    unsupported platforms or if launching the terminal fails.
+    """
+    _close_existing_log_tail_window()
+    log_path_str = str(log_path)
+    title = _LOG_TAIL_TITLE
+    try:
+        if sys.platform == "darwin":
+            # Custom title set via AppleScript so _close_existing_log_tail_window
+            # can find this window on the next restart.
+            shell_cmd = (
+                f'clear; echo Tailing runtime log: {log_path_str}; echo; '
+                f'tail -n 50 -f \\"{log_path_str}\\"'
+            )
+            script = (
+                f'tell application "Terminal"\n'
                 f'  activate\n'
-                f'  do script "printf \\"\\\\033]0;{title}\\\\007\\"; '
-                f'echo Tailing runtime log: {log_path_str}; echo; '
-                f'tail -n 50 -f \\"{log_path_str}\\""\n'
+                f'  set newTab to do script "{shell_cmd}"\n'
+                f'  set custom title of (window 1) to "{title}"\n'
                 f'end tell'
             )
             subprocess.Popen(["osascript", "-e", script])
