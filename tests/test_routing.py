@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import threading
 from pathlib import Path
@@ -200,7 +201,7 @@ def test_resolve_working_directory_uses_agent_config_working_dir(tmp_path: Path)
         agent_dir = router._config.agents_dir / "builder"
         agent_dir.mkdir(parents=True)
         (agent_dir / "agent.json").write_text(
-            f'{{"working_dir": "{tmp_path}/my-projects"}}',
+            json.dumps({"working_dir": str(tmp_path / "my-projects")}),
             encoding="utf-8",
         )
 
