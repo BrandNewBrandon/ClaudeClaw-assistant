@@ -30,6 +30,11 @@ def _launchd_plist_path() -> Path:
 
 
 def _launchd_plist_xml(python_exe: str, project_root: Path, log_path: Path) -> str:
+    # Autostart target is the watchdog, not app.main directly. The watchdog
+    # calls _start_runtime when the runtime pid is missing or dead, so a
+    # single launchd agent keeps the runtime alive across crashes, manual
+    # stops, and reboots. launchd's own KeepAlive also re-runs the watchdog
+    # itself if it ever exits.
     log_path.parent.mkdir(parents=True, exist_ok=True)
     return f"""\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -43,7 +48,8 @@ def _launchd_plist_xml(python_exe: str, project_root: Path, log_path: Path) -> s
     <array>
         <string>{python_exe}</string>
         <string>-m</string>
-        <string>app.main</string>
+        <string>app.assistant_cli</string>
+        <string>watchdog</string>
     </array>
     <key>WorkingDirectory</key>
     <string>{project_root}</string>
@@ -117,14 +123,17 @@ def _systemd_service_path() -> Path:
 
 
 def _systemd_unit(python_exe: str, project_root: Path) -> str:
+    # ExecStart is the watchdog; it handles runtime lifecycle and
+    # restart-on-crash. systemd's Restart=on-failure is an outer safety net
+    # in case the watchdog itself dies.
     return f"""\
 [Unit]
-Description=Assistant Runtime
+Description=Assistant Runtime (via watchdog supervisor)
 After=network.target
 
 [Service]
 Type=simple
-ExecStart={python_exe} -m app.main
+ExecStart={python_exe} -m app.assistant_cli watchdog
 WorkingDirectory={project_root}
 Restart=on-failure
 RestartSec=5
@@ -190,7 +199,13 @@ def _windows_install(project_root: Path, python_exe: str) -> str:
         ["schtasks", "/Delete", "/TN", _TASK_NAME, "/F"],
         capture_output=True, check=False,
     )
-    action = f"{python_exe} -m app.main"
+    # Prefer pythonw.exe so the watchdog runs without a visible console
+    # window. Falls back to python.exe if pythonw isn't next to python.
+    exe = python_exe
+    pyw = Path(python_exe).with_name("pythonw.exe")
+    if pyw.exists():
+        exe = str(pyw)
+    action = f'"{exe}" -m app.assistant_cli watchdog'
     result = subprocess.run(
         [
             "schtasks", "/Create",
@@ -198,7 +213,6 @@ def _windows_install(project_root: Path, python_exe: str) -> str:
             "/TR", action,
             "/SC", "ONLOGON",
             "/RL", "LIMITED",
-            "/SD", str(project_root),
             "/F",
         ],
         capture_output=True, text=True, check=False,
@@ -206,7 +220,11 @@ def _windows_install(project_root: Path, python_exe: str) -> str:
     if result.returncode != 0:
         err = (result.stderr or result.stdout).strip()
         return f"Warning: schtasks create returned an error: {err}"
-    return f"Autostart enabled via Windows Scheduled Task '{_TASK_NAME}' (trigger: ONLOGON)."
+    return (
+        f"Autostart enabled via Windows Scheduled Task '{_TASK_NAME}' (trigger: ONLOGON).\n"
+        f"  Command: {action}\n"
+        f"  The watchdog launches and keeps the runtime alive across crashes."
+    )
 
 
 def _windows_uninstall() -> str:
