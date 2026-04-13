@@ -6,6 +6,7 @@ config/config.json
 # Personal agent data
 agents/
 archived_agents/
+shared/
 
 # Python
 .venv/

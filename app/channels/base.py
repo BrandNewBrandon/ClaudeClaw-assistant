@@ -76,6 +76,12 @@ class BaseChannel(ABC):
         No-op on channels that do not support editing.
         """
 
+    def delete_message(self, chat_id: str, message_id: int) -> None:
+        """Delete a previously sent message.
+
+        No-op on channels that do not support deletion.
+        """
+
     def send_message_with_buttons(
         self, chat_id: str, text: str, buttons: list[list[dict[str, str]]]
     ) -> int | None:

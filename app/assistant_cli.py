@@ -1479,6 +1479,44 @@ def _cmd_update(project_root: Path) -> int:
     print("\nUpdating dependencies...")
     pip_cmd = str(venv_pip) if venv_pip.exists() else "pip"
 
+    # Verify the venv's Python version is supported. Python 3.14+ lacks
+    # prebuilt wheels for many native-extension packages (py-rust-stemmers,
+    # etc.), which forces pip to compile from source and fails on machines
+    # without MSVC/Rust toolchains.
+    venv_py = project_root / ".venv" / "bin" / "python"
+    if os.name == "nt":
+        venv_py = project_root / ".venv" / "Scripts" / "python.exe"
+    if venv_py.exists():
+        try:
+            vresult = subprocess.run(
+                [str(venv_py), "-c",
+                 "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+                capture_output=True, text=True, timeout=10,
+            )
+            venv_version = vresult.stdout.strip()
+            if venv_version:
+                major, minor = venv_version.split(".")
+                if (int(major), int(minor)) >= (3, 14) or (int(major), int(minor)) < (3, 11):
+                    print()
+                    print(f"Error: your .venv uses Python {venv_version}, which is not supported.")
+                    print("  ClaudeClaw requires Python 3.11, 3.12, or 3.13.")
+                    print("  Python 3.14 is too new — many native-extension wheels are not yet published for it.")
+                    print()
+                    print("To fix, rebuild the .venv on a supported Python:")
+                    if os.name == "nt":
+                        print(f"  cd {project_root}")
+                        print("  rmdir /s /q .venv")
+                        print("  py -3.12 -m venv .venv")
+                        print("  assistant update")
+                    else:
+                        print(f"  cd {project_root}")
+                        print("  rm -rf .venv")
+                        print("  python3.12 -m venv .venv")
+                        print("  assistant update")
+                    return 1
+        except (ValueError, subprocess.TimeoutExpired, OSError):
+            pass  # best-effort check; don't block update on a bad probe
+
     # Clean up broken build artifacts from failed native-extension installs
     # (e.g. Rust/C++ packages that failed mid-compile and left partial state).
     print("  Cleaning build cache...")

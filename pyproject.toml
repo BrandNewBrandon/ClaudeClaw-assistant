@@ -7,7 +7,7 @@ name = "assistant-runtime"
 version = "0.2.0"
 description = "Standalone personal assistant runtime powered by Claude Code"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "certifi",
     "pymupdf",

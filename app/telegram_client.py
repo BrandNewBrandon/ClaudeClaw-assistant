@@ -214,6 +214,16 @@ class TelegramClient:
         )
         return int(result["message_id"])
 
+    def delete_message(self, chat_id: str, message_id: int) -> None:
+        """Delete a message. Silently swallows errors (e.g. already deleted)."""
+        try:
+            self._post_json(
+                "deleteMessage",
+                {"chat_id": chat_id, "message_id": message_id},
+            )
+        except TelegramError:
+            pass
+
     def edit_message(self, chat_id: str, message_id: int, text: str) -> None:
         """Edit an existing message in-place.
 

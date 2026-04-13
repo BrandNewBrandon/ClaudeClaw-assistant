@@ -1397,6 +1397,13 @@ class AssistantRouter:
                 # Final answer — do a clean last edit (no cursor)
                 if last_output.strip() == "__SILENT__":
                     LOGGER.info("Streaming: silent reply suppressed agent=%s", active_agent)
+                    # Clean up any leftover placeholder (e.g. a tool-status message
+                    # from an earlier iteration) so the chat doesn't show a dangling bubble.
+                    if message_id_box[0] is not None:
+                        try:
+                            channel.delete_message(chat_id, message_id_box[0])
+                        except Exception:
+                            pass
                 else:
                     _update_message(last_output)
                     LOGGER.info("Streaming: final reply agent=%s iteration=%s", active_agent, iteration)

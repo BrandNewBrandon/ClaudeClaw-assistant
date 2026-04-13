@@ -80,6 +80,12 @@ class TelegramChannel(BaseChannel):
         except TelegramError as exc:
             raise ChannelError(str(exc)) from exc
 
+    def delete_message(self, chat_id: str, message_id: int) -> None:
+        try:
+            self._client.delete_message(chat_id, message_id)
+        except TelegramError:
+            pass
+
     def send_message_with_buttons(
         self, chat_id: str, text: str, buttons: list[list[dict[str, str]]]
     ) -> int | None:
