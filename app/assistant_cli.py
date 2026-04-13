@@ -81,6 +81,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers.add_parser("update", help="Pull latest code from GitHub and update dependencies")
 
+    watchdog_parser = subparsers.add_parser(
+        "watchdog",
+        help="Run a supervisor loop that restarts the runtime if it dies",
+    )
+    watchdog_parser.add_argument(
+        "--interval",
+        type=float,
+        default=15.0,
+        help="Seconds between health checks (default: 15)",
+    )
+    watchdog_parser.add_argument(
+        "--max-restarts",
+        type=int,
+        default=5,
+        help="Bail out after this many restarts within --window seconds (default: 5)",
+    )
+    watchdog_parser.add_argument(
+        "--window",
+        type=float,
+        default=300.0,
+        help="Rolling window in seconds for --max-restarts (default: 300 = 5 min)",
+    )
+
     logs_parser = subparsers.add_parser("logs", help="Tail the runtime log")
     logs_parser.add_argument("-n", "--lines", type=int, default=50, help="Lines of history to show (default: 50)")
     logs_parser.add_argument("--no-follow", action="store_true", help="Print last N lines and exit (don't tail)")
@@ -1682,6 +1705,58 @@ def _open_log_tail_window(log_path: Path) -> bool:
         return False
 
 
+def _cmd_watchdog(
+    project_root: Path,
+    *,
+    interval: float = 15.0,
+    max_restarts: int = 5,
+    window: float = 300.0,
+) -> int:
+    """Supervisor loop: poll runtime.pid every `interval` seconds, restart if dead.
+
+    Rate-limited: if more than `max_restarts` occur inside a rolling `window`
+    seconds, bail out (something is wrong that restarting won't fix). Intended
+    to be left running in a terminal or registered with Task Scheduler /
+    systemd.
+    """
+    ensure_runtime_dirs()
+    pid_path = get_runtime_pid_file()
+    print(
+        f"assistant watchdog: interval={interval}s max_restarts={max_restarts} "
+        f"window={window}s pid_file={pid_path}"
+    )
+    print("Press Ctrl+C to stop.")
+
+    restart_times: list[float] = []
+    try:
+        while True:
+            pid = _read_pid(pid_path)
+            alive = pid is not None and _is_process_running(pid)
+            if alive:
+                time.sleep(interval)
+                continue
+
+            now = time.monotonic()
+            # Drop restarts that fell out of the rolling window.
+            restart_times = [t for t in restart_times if now - t < window]
+            if len(restart_times) >= max_restarts:
+                print(
+                    f"assistant watchdog: {len(restart_times)} restarts within "
+                    f"{window:.0f}s — giving up. Check runtime.log and fix the "
+                    f"underlying issue."
+                )
+                return 1
+
+            print(f"assistant watchdog: runtime is down, restarting (pid={pid})")
+            _start_runtime(project_root, open_tail_window=False)
+            restart_times.append(now)
+            # Give the new process a moment to write its pid file and settle.
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nassistant watchdog: stopped.")
+        return 0
+
+
 def _start_runtime(project_root: Path, *, open_tail_window: bool = True) -> int:
     ensure_runtime_dirs()
     _cleanup_stale_runtime_files()
@@ -1696,14 +1771,36 @@ def _start_runtime(project_root: Path, *, open_tail_window: bool = True) -> int:
     _safe_unlink(lock_path)
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    # On Windows, start_new_session alone doesn't detach from the parent
+    # console — the child still receives CTRL_CLOSE_EVENT when the terminal
+    # that launched `assistant start` closes, and Ctrl+C in that terminal
+    # propagates as KeyboardInterrupt to the runtime. DETACHED_PROCESS gives
+    # the child no console at all so neither signal can reach it. On POSIX,
+    # start_new_session=True is the right flag.
     with log_path.open("a", encoding="utf-8") as log_handle:
-        subprocess.Popen(
-            [sys.executable, "-m", "app.main"],
-            cwd=str(project_root),
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        if os.name == "nt":
+            creationflags = (
+                subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+                | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+            )
+            subprocess.Popen(
+                [sys.executable, "-m", "app.main"],
+                cwd=str(project_root),
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                creationflags=creationflags,
+                close_fds=True,
+            )
+        else:
+            subprocess.Popen(
+                [sys.executable, "-m", "app.main"],
+                cwd=str(project_root),
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
 
     runtime_pid: int | None = None
     for _ in range(30):
@@ -2145,6 +2242,14 @@ def main() -> int:
 
     if args.command == "update":
         return _cmd_update(project_root)
+
+    if args.command == "watchdog":
+        return _cmd_watchdog(
+            project_root,
+            interval=args.interval,
+            max_restarts=args.max_restarts,
+            window=args.window,
+        )
 
     if args.command == "status":
         return _status_runtime()
