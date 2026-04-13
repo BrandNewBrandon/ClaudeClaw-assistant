@@ -249,6 +249,9 @@ def build_default_registry(
                 token = args.get("token")
                 app_token = args.get("app_token")
                 chat_identifier = args.get("chat_identifier")
+                # Pass router.add_account as the commit hook so failure
+                # rolls back config and keyring atomically.
+                commit_hook = _router.add_account if _router is not None else None
                 result = bind_channel_impl(
                     _config_path,
                     agent=agent,
@@ -256,17 +259,9 @@ def build_default_registry(
                     token=str(token) if token else None,
                     app_token=str(app_token) if app_token else None,
                     chat_identifier=str(chat_identifier) if chat_identifier else None,
+                    commit_hook=commit_hook,
                 )
-                reload_msg = ""
-                if _router is not None:
-                    try:
-                        _router.add_account(result["account_id"])
-                        reload_msg = " Router hot-reloaded — new bot is live."
-                    except Exception as exc:  # noqa: BLE001
-                        reload_msg = (
-                            f" WARNING: config written but hot-reload failed: {exc}. "
-                            f"A runtime restart will pick up the change."
-                        )
+                reload_msg = " Router hot-reloaded — new bot is live." if _router is not None else ""
                 return (
                     f"Bound {result['channel']} channel to agent {agent!r} "
                     f"({result['display']}). Account id: {result['account_id']}.{reload_msg}"

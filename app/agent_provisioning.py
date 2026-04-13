@@ -133,11 +133,18 @@ def bind_channel_impl(
     chat_identifier: str | None = None,
     allowed_chat_ids: list[str] | None = None,
     secret_store: SecretStore | None = None,
+    commit_hook: "Any" = None,
 ) -> dict[str, Any]:
     """Validate credentials, store in keyring, append to config.json.
 
+    If ``commit_hook`` is provided, it is called with the new account_id
+    AFTER the config has been written. If the hook raises, the config file
+    is restored to its prior bytes AND the keyring entries just written are
+    deleted, so the operation is atomic: either the account is live OR
+    nothing changed. Without a hook, the caller is responsible for any
+    post-commit work and accepts the rollback gap.
+
     Returns dict: {"account_id", "channel", "display", "info"}.
-    Caller should then call router.add_account(result["account_id"]) to hot-load.
     """
     channel = channel.lower().strip()
     agent = agent.strip()
@@ -184,15 +191,24 @@ def bind_channel_impl(
         display = chat_identifier
         info = {"chat_identifier": chat_identifier}
 
-    # Store secrets
+    # Snapshot config.json bytes before any mutation so we can rollback if
+    # commit_hook fails. None means "no prior file — rollback by deleting".
+    config_path = Path(config_path)
+    prior_bytes: bytes | None = None
+    if config_path.exists():
+        prior_bytes = config_path.read_bytes()
+
+    # Store secrets — track what we set so we can un-set on rollback.
+    secrets_written: list[tuple[str, str]] = []
     if channel in {"telegram", "discord", "slack"}:
         store.set(agent, channel, token or "")
+        secrets_written.append((agent, channel))
     if channel == "slack":
         store.set(agent, "slack-app", app_token or "")
+        secrets_written.append((agent, "slack-app"))
 
-    # Update config.json
-    config_path = Path(config_path)
-    cfg = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+    # Build the new config dict from the (possibly just-read) prior state.
+    cfg = json.loads(prior_bytes.decode("utf-8")) if prior_bytes else {}
     accounts = cfg.setdefault("accounts", {})
     routing = cfg.setdefault("routing", {})
     account_id = f"{agent}-{channel}"
@@ -210,6 +226,31 @@ def bind_channel_impl(
     accounts[account_id] = entry
     routing[account_id] = {"default_agent": agent, "chat_agent_map": {}}
     config_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+    # Run the caller's commit hook (typically router.add_account). If it
+    # raises, undo everything and re-raise as ProvisioningError so the tool
+    # layer reports a clean failure instead of a half-applied state.
+    if commit_hook is not None:
+        try:
+            commit_hook(account_id)
+        except Exception as exc:  # noqa: BLE001
+            # Rollback config.json
+            if prior_bytes is not None:
+                config_path.write_bytes(prior_bytes)
+            else:
+                try:
+                    config_path.unlink()
+                except FileNotFoundError:
+                    pass
+            # Rollback keyring
+            for ag, ch in secrets_written:
+                try:
+                    store.delete(ag, ch)
+                except Exception:  # noqa: BLE001
+                    pass
+            raise ProvisioningError(
+                f"bind_channel commit failed; rolled back config and secrets: {exc}"
+            ) from exc
 
     return {"account_id": account_id, "channel": channel, "display": display, "info": info}
 

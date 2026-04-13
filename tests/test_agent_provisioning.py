@@ -162,6 +162,60 @@ def test_bind_rejects_unknown_channel(tmp_path):
         bind_channel_impl(cfg, "finance", "fax", token="t", secret_store=FakeStore())
 
 
+def test_bind_rolls_back_config_and_secrets_when_commit_hook_fails(tmp_path):
+    """If commit_hook raises, config.json and the keyring must return to prior state."""
+    cfg = _seed_config(tmp_path)
+    prior = cfg.read_text()
+    store = FakeStore()
+
+    def failing_hook(account_id: str) -> None:
+        raise RuntimeError("add_account exploded")
+
+    with patch(
+        "app.agent_provisioning._telegram_get_me",
+        return_value={"username": "fin_bot", "id": 1},
+    ):
+        with pytest.raises(ProvisioningError, match="rolled back"):
+            bind_channel_impl(
+                cfg,
+                "finance",
+                "telegram",
+                token="123:abc",
+                secret_store=store,
+                commit_hook=failing_hook,
+            )
+
+    # Config.json must be byte-identical to its prior state.
+    assert cfg.read_text() == prior
+    # Keyring must not contain the token we staged.
+    assert ("finance", "telegram") not in store.items
+
+
+def test_bind_commit_hook_success_keeps_config(tmp_path):
+    """Happy-path: hook succeeds, config is written, secrets are kept."""
+    cfg = _seed_config(tmp_path)
+    store = FakeStore()
+    hook_calls: list[str] = []
+
+    with patch(
+        "app.agent_provisioning._telegram_get_me",
+        return_value={"username": "fin_bot", "id": 1},
+    ):
+        bind_channel_impl(
+            cfg,
+            "finance",
+            "telegram",
+            token="123:abc",
+            secret_store=store,
+            commit_hook=hook_calls.append,
+        )
+
+    assert hook_calls == ["finance-telegram"]
+    assert store.items[("finance", "telegram")] == "123:abc"
+    data = json.loads(cfg.read_text())
+    assert "finance-telegram" in data["accounts"]
+
+
 # ---------- list_imessage_chats ----------
 
 def test_list_imessage_on_windows_errors(monkeypatch):
