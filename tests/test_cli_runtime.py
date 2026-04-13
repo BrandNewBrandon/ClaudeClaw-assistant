@@ -59,7 +59,7 @@ def test_is_process_running_uses_tasklist_on_windows(monkeypatch) -> None:
     _force_tasklist_fallback(monkeypatch)
 
     def fake_run(*args, **kwargs):
-        assert kwargs.get("creationflags") == subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        assert kwargs.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0)
         return subprocess.CompletedProcess(
             args=args[0],
             returncode=0,

@@ -1272,7 +1272,7 @@ def _is_process_running(pid: int) -> bool:
             result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
                 capture_output=True, text=True, check=False,
-                creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             output = (result.stdout or "").strip()
             if result.returncode != 0 or not output:
