@@ -1,0 +1,10 @@
+{
+  "display_name": "{{display_name}}",
+  "description": "{{description}}",
+  "model": "opus",
+  "effort": "high",
+  "safe_commands": [],
+  "working_dir": null,
+  "computer_use": false,
+  "computer_use_auto_approve": false
+}

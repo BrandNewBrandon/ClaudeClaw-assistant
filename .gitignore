@@ -4,7 +4,8 @@ config/config.json
 *.secret
 
 # Personal agent data
-agents/
+agents/*
+!agents/_template/
 archived_agents/
 shared/
 
