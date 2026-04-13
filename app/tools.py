@@ -84,10 +84,37 @@ class ToolLoop:
         return "\n".join(lines)
 
     def parse_tool_call(self, text: str) -> ToolCall | None:
+        """Extract a tool call from the model's reply.
+
+        Tolerant: the model is instructed to emit *just* ``TOOL {...}``, but
+        sometimes leaks prose before the TOOL line. We scan for the first
+        line that starts with ``TOOL `` and parse the rest of that line as
+        JSON. Any preceding prose is discarded — it's not a final answer,
+        it's the model narrating its own action, and if we treated it as
+        the final reply the user would see "About to run X..." followed by
+        no execution (bug C: tool never queued).
+        """
         stripped = text.strip()
-        if not stripped.startswith("TOOL "):
+        if not stripped:
             return None
-        payload = stripped.removeprefix("TOOL ").strip()
+
+        # Fast path: whole message is the TOOL call.
+        payload: str | None = None
+        if stripped.startswith("TOOL "):
+            payload = stripped.removeprefix("TOOL ").strip()
+        else:
+            # Scan line-by-line for a mid-message TOOL call. The JSON payload
+            # may span multiple lines, so we grab everything from the TOOL
+            # keyword to the end of the message and let json.loads handle it.
+            for idx, line in enumerate(stripped.splitlines()):
+                if line.lstrip().startswith("TOOL "):
+                    remainder = "\n".join(stripped.splitlines()[idx:])
+                    payload = remainder.lstrip()[5:].strip()
+                    break
+
+        if payload is None:
+            return None
+
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as exc:
@@ -535,30 +562,112 @@ def _run_command(arguments: dict[str, Any], *, cwd: str | None = None) -> str:
     except OSError as exc:
         raise ToolError(f"Failed to run command: {exc}")
 
+    # Reject binary output BEFORE feeding it to the model. Dumping 4 KB of
+    # ASCII-stripped ZIP bytes into the prompt wasted tokens AND the model
+    # dutifully echoed the garbage straight to the user chat.
+    stdout_binary = _looks_binary(result.stdout)
+    stderr_binary = _looks_binary(result.stderr)
+
     output_parts: list[str] = []
     if result.stdout.strip():
-        output_parts.append(result.stdout.strip())
+        if stdout_binary:
+            output_parts.append(_summarize_binary("stdout", result.stdout))
+        else:
+            output_parts.append(result.stdout.strip())
     if result.stderr.strip():
         stderr = result.stderr.strip()
-        # For failed builds, keep only the last portion — the actual error
-        # messages. Rust/C++ compilers emit thousands of lines before the
-        # real error; shipping all of it confuses the model and can exceed
-        # message limits.
-        if result.returncode != 0:
-            stderr_lines = stderr.splitlines()
-            if len(stderr_lines) > 30:
-                stderr = "\n".join(
-                    ["...[earlier output truncated]"] + stderr_lines[-30:]
-                )
-        output_parts.append(f"[stderr]\n{stderr}")
+        if stderr_binary:
+            output_parts.append("[stderr]\n" + _summarize_binary("stderr", result.stderr))
+        else:
+            # For failed builds, keep only the last portion — the actual error
+            # messages. Rust/C++ compilers emit thousands of lines before the
+            # real error; shipping all of it confuses the model and can exceed
+            # message limits.
+            if result.returncode != 0:
+                stderr_lines = stderr.splitlines()
+                if len(stderr_lines) > 30:
+                    stderr = "\n".join(
+                        ["...[earlier output truncated]"] + stderr_lines[-30:]
+                    )
+            output_parts.append(f"[stderr]\n{stderr}")
     output = "\n".join(output_parts)
-    # Strip non-printable / garbled bytes that confuse the model (common in
+    # Strip remaining non-printable chars (non-binary but garbled — common in
     # Rust/C++ build output on Windows where emoji bytes get double-decoded).
     output = re.sub(r"[^\x20-\x7E\n\r\t]", "", output)
     if len(output) > 4000:
         output = output[:4000].rstrip() + "\n...[truncated]"
     exit_info = f"\n[exit code {result.returncode}]" if result.returncode != 0 else ""
     return (output or "(no output)") + exit_info
+
+
+_BINARY_MAGIC_PREFIXES = (
+    b"PK\x03\x04",  # ZIP (covers .docx, .xlsx, .pptx, .jar, .apk)
+    b"PK\x05\x06",  # empty ZIP
+    b"%PDF",         # PDF
+    b"\x89PNG\r\n",  # PNG
+    b"GIF87a",
+    b"GIF89a",
+    b"\xff\xd8\xff",  # JPEG
+    b"\x7fELF",      # Linux executable
+    b"MZ",           # Windows executable / DLL
+    b"\x1f\x8b",     # gzip
+    b"Rar!\x1a\x07",  # RAR
+    b"\xfd7zXZ",     # xz
+    b"BZh",          # bzip2
+)
+
+
+def _looks_binary(text: str) -> bool:
+    """True if `text` looks like the content of a binary file.
+
+    Two signals:
+    1. A known magic-byte prefix (zip/pdf/png/etc) — always treat as binary.
+    2. A long-enough blob (>=256 bytes) where less than 70% of the first
+       2 KB is printable ASCII + whitespace. Short strings with a handful
+       of emoji/unicode are NOT flagged — the existing non-ASCII strip
+       handles them.
+    """
+    if not text:
+        return False
+    raw = text.encode("utf-8", errors="replace")
+    for magic in _BINARY_MAGIC_PREFIXES:
+        if raw.startswith(magic):
+            return True
+    if len(raw) < 256:
+        return False
+    sample = raw[:2048]
+    printable = sum(1 for b in sample if 32 <= b < 127 or b in (9, 10, 13))
+    return (printable / len(sample)) < 0.70
+
+
+def _summarize_binary(label: str, text: str) -> str:
+    """Short, token-cheap summary of a binary blob — no raw bytes at all."""
+    raw = text.encode("utf-8", errors="replace")
+    magic = raw[:4].hex()
+    kind = "binary file"
+    for sig in _BINARY_MAGIC_PREFIXES:
+        if raw.startswith(sig):
+            kind = {
+                b"PK\x03\x04": "ZIP archive (.docx/.xlsx/.pptx/.jar/.zip)",
+                b"PK\x05\x06": "empty ZIP archive",
+                b"%PDF": "PDF document",
+                b"\x89PNG\r\n": "PNG image",
+                b"GIF87a": "GIF image",
+                b"GIF89a": "GIF image",
+                b"\xff\xd8\xff": "JPEG image",
+                b"\x7fELF": "Linux ELF executable",
+                b"MZ": "Windows PE executable",
+                b"\x1f\x8b": "gzip archive",
+                b"Rar!\x1a\x07": "RAR archive",
+                b"\xfd7zXZ": "xz archive",
+                b"BZh": "bzip2 archive",
+            }.get(sig, "binary file")
+            break
+    return (
+        f"[{label} is {kind}, {len(raw)} bytes, magic=0x{magic}] "
+        f"Cannot render as text. Use a format-appropriate extractor "
+        f"(e.g. python-docx for .docx, pypdf for PDF, pillow for images)."
+    )
 
 
 def _extract_readable_text(html: str) -> str:

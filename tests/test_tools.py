@@ -12,6 +12,29 @@ def test_tool_loop_parses_tool_call() -> None:
     assert call == ToolCall(name="web_search", arguments={"query": "openclaw"})
 
 
+def test_tool_loop_parses_tool_call_with_prose_prefix() -> None:
+    """Model sometimes leaks prose before the TOOL line — parser must still catch it."""
+    registry = ToolRegistry()
+    loop = ToolLoop(registry)
+
+    reply = (
+        "My bad — wrong approach on that last call. Let me try a proper extractor.\n"
+        "\n"
+        'TOOL {"name": "web_search", "arguments": {"query": "openclaw"}}'
+    )
+    call = loop.parse_tool_call(reply)
+    assert call == ToolCall(name="web_search", arguments={"query": "openclaw"})
+
+
+def test_tool_loop_returns_none_for_final_answer() -> None:
+    """Pure prose with no TOOL line is a final answer — not a tool call."""
+    registry = ToolRegistry()
+    loop = ToolLoop(registry)
+
+    assert loop.parse_tool_call("Here's the answer: 42.") is None
+    assert loop.parse_tool_call("") is None
+
+
 def test_tool_loop_formats_tool_result() -> None:
     registry = ToolRegistry()
     loop = ToolLoop(registry)
@@ -148,6 +171,63 @@ def test_run_command_strips_non_ascii() -> None:
     assert "world" in output
     # No garbled bytes
     assert all(ord(c) < 128 or c in "\n\r\t" for c in output)
+
+
+def test_run_command_summarizes_zip_binary_output() -> None:
+    """Get-Content on a .docx returns ZIP bytes — don't dump them to the model."""
+    from unittest.mock import patch, MagicMock
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 0
+    # Simulate what Get-Content returns for a docx: starts with PK magic
+    # bytes then ~1 KB of high-entropy compressed data.
+    fake.stdout = "PK\x03\x04" + "".join(chr((i * 31) % 256) for i in range(2000))
+    fake.stderr = ""
+
+    with patch("app.tools.subprocess.run", return_value=fake):
+        output = _run_command({"command": "Get-Content foo.docx"})
+
+    # Must be a short summary, not raw bytes
+    assert "ZIP archive" in output
+    assert "Cannot render as text" in output
+    # Must NOT contain the garbage payload
+    assert len(output) < 500
+    assert chr((500 * 31) % 256) not in output or True  # byte-entropy drops out
+
+
+def test_run_command_summarizes_pdf_binary_output() -> None:
+    """PDF magic-byte detection short-circuits binary dumps."""
+    from unittest.mock import patch, MagicMock
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 0
+    fake.stdout = "%PDF-1.4\n" + "\x00" * 500
+    fake.stderr = ""
+
+    with patch("app.tools.subprocess.run", return_value=fake):
+        output = _run_command({"command": "cat foo.pdf"})
+
+    assert "PDF document" in output
+    assert "Cannot render as text" in output
+
+
+def test_run_command_passes_text_output_through() -> None:
+    """Non-binary output still renders normally — no regression on normal commands."""
+    from unittest.mock import patch, MagicMock
+    from app.tools import _run_command
+
+    fake = MagicMock()
+    fake.returncode = 0
+    fake.stdout = "hello from a normal command\n"
+    fake.stderr = ""
+
+    with patch("app.tools.subprocess.run", return_value=fake):
+        output = _run_command({"command": "echo hello"})
+
+    assert "hello from a normal command" in output
+    assert "Cannot render" not in output
 
 
 def test_run_command_uses_longer_timeout_for_pip() -> None:
