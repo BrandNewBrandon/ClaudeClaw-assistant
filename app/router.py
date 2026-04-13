@@ -1195,7 +1195,9 @@ class AssistantRouter:
                     working_directory=working_directory,
                     model=model,
                     effort=effort,
-                    session_id=session_id if iteration == 0 else None,
+                    # Chain iterations through the same Claude Code session so
+                    # Anthropic prompt caching lands across tool round-trips.
+                    session_id=last_session_id or session_id,
                 )
             except ModelRunnerError as exc:
                 self._runtime_state.mark_error(str(exc))
@@ -1416,7 +1418,9 @@ class AssistantRouter:
                     working_directory=working_directory,
                     model=model,
                     effort=effort,
-                    session_id=session_id if iteration == 0 else None,
+                    # Chain iterations through the same Claude Code session so
+                    # Anthropic prompt caching lands across tool round-trips.
+                    session_id=last_session_id or session_id,
                     on_chunk=_on_chunk,
                 )
             except Exception as exc:

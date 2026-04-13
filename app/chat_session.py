@@ -207,7 +207,9 @@ class TerminalChatSession:
                 result = self._runner.run_prompt(
                     prompt=prompt,
                     working_directory=self._working_dir,
-                    session_id=prior_session_id if iteration == 0 else None,
+                    # Chain iterations through the same Claude Code session so
+                    # Anthropic prompt caching lands across tool round-trips.
+                    session_id=last_session_id or prior_session_id,
                 )
             except ModelRunnerError as exc:
                 return f"Error: {exc}"
