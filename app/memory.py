@@ -666,8 +666,9 @@ class ConsolidationThread:
         if not self._agents_dir.exists():
             return
 
+        from .agent_provisioning import is_real_agent_dir
         for agent_dir in sorted(self._agents_dir.iterdir()):
-            if not agent_dir.is_dir():
+            if not is_real_agent_dir(agent_dir):
                 continue
             agent = agent_dir.name
             try:

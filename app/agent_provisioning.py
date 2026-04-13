@@ -16,6 +16,21 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 _RESERVED_NAMES = {"_template"}
 
 
+def is_real_agent_dir(path: Path) -> bool:
+    """True if `path` is a directory that represents a real user agent.
+
+    Excludes hidden dirs (`.`-prefixed), template/reserved dirs (`_`-prefixed),
+    and non-directories. Use at every `agents_dir.iterdir()` call site so the
+    template folder never gets treated as an agent by consolidation, listings,
+    dashboards, or the MCP server.
+    """
+    if not path.is_dir():
+        return False
+    if path.name.startswith((".", "_")):
+        return False
+    return True
+
+
 class ProvisioningError(Exception):
     pass
 

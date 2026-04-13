@@ -151,8 +151,9 @@ def run_doctor(config_path: str | Path) -> list[DoctorCheck]:
         from .agent_config import load_agent_config
         any_cu = False
         if config.agents_dir.exists():
+            from .agent_provisioning import is_real_agent_dir
             for agent_path in config.agents_dir.iterdir():
-                if agent_path.is_dir():
+                if is_real_agent_dir(agent_path):
                     try:
                         ac = load_agent_config(agent_path)
                         if ac.computer_use:

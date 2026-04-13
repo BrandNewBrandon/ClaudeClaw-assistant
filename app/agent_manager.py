@@ -34,9 +34,10 @@ class AgentManager:
         if not self._agents_dir.exists():
             return []
 
+        from .agent_provisioning import is_real_agent_dir
         agents: list[AgentInfo] = []
         for path in sorted(self._agents_dir.iterdir()):
-            if not path.is_dir():
+            if not is_real_agent_dir(path):
                 continue
             agents.append(
                 AgentInfo(

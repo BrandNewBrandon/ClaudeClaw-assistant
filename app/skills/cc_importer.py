@@ -389,7 +389,7 @@ class CCImporterSkill(SkillBase):
             return "Cannot import — agents directory not configured."
 
         # Find agents that exist
-        agents = [d.name for d in self._agents_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        agents = [d.name for d in self._agents_dir.iterdir() if d.is_dir() and not d.name.startswith((".", "_"))]
         if not agents:
             return "No agents found."
 
@@ -424,7 +424,7 @@ class CCImporterSkill(SkillBase):
         if self._agents_dir is None:
             return "Cannot remove — agents directory not configured."
 
-        agents = [d.name for d in self._agents_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        agents = [d.name for d in self._agents_dir.iterdir() if d.is_dir() and not d.name.startswith((".", "_"))]
         results: list[str] = []
         for agent in agents:
             current = _load_agent_cc_skills(self._agents_dir, agent)

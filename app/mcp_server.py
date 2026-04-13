@@ -69,7 +69,8 @@ def _load_paths() -> tuple[Path, Path]:
 def _list_agent_names(agents_dir: Path) -> list[str]:
     if not agents_dir.exists():
         return []
-    return sorted(d.name for d in agents_dir.iterdir() if d.is_dir())
+    from .agent_provisioning import is_real_agent_dir
+    return sorted(d.name for d in agents_dir.iterdir() if is_real_agent_dir(d))
 
 
 # ---------------------------------------------------------------------------

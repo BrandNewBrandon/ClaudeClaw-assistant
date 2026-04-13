@@ -586,8 +586,9 @@ def _api_status() -> dict[str, Any]:
 def _api_agents(agents_dir: Path) -> dict[str, Any]:
     agents: list[dict[str, Any]] = []
     if agents_dir.exists():
+        from ..agent_provisioning import is_real_agent_dir
         for agent_dir in sorted(agents_dir.iterdir()):
-            if not agent_dir.is_dir():
+            if not is_real_agent_dir(agent_dir):
                 continue
             agent_md_path = agent_dir / "AGENT.md"
             agent_md = agent_md_path.read_text(encoding="utf-8").strip() if agent_md_path.exists() else ""
@@ -668,7 +669,7 @@ def _api_skills() -> dict[str, Any]:
         from ..plugins.loader import build_plugin_registry
         registry = build_plugin_registry()
         skills = []
-        for skill in registry._skills:
+        for skill in registry.all_skills():
             tool_handlers = skill.tools()
             cmd_map = skill.commands()
             skills.append({
