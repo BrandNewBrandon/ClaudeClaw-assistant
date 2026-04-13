@@ -1011,7 +1011,27 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _handle_handler_exception(self, method: str, path: str) -> None:
+        """Last-resort catch for unhandled exceptions in do_GET / do_POST.
+
+        Logs the full traceback and tries to send a 500 JSON body. If the
+        response has already been partially written, the best-effort send
+        will fail — swallow that too. The whole point of this method is to
+        keep the dashboard HTTP thread alive across bad requests.
+        """
+        LOGGER.exception("Dashboard handler crashed method=%s path=%s", method, path)
+        try:
+            self._send_json({"error": "internal server error"}, 500)
+        except Exception:  # noqa: BLE001
+            pass
+
     def do_GET(self) -> None:
+        try:
+            self._do_get_inner()
+        except Exception:  # noqa: BLE001 — last-resort safety net for dashboard thread
+            self._handle_handler_exception("GET", self.path)
+
+    def _do_get_inner(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
@@ -1067,6 +1087,12 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json({"error": "Not found"}, 404)
 
     def do_POST(self) -> None:
+        try:
+            self._do_post_inner()
+        except Exception:  # noqa: BLE001 — last-resort safety net for dashboard thread
+            self._handle_handler_exception("POST", self.path)
+
+    def _do_post_inner(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
@@ -1220,11 +1246,19 @@ class WebDashboard:
                 self._server.serve_forever()
             except KeyboardInterrupt:
                 pass
+            except Exception:  # noqa: BLE001
+                LOGGER.exception("Dashboard serve_forever crashed")
             finally:
                 self._server.server_close()
         else:
+            def _run() -> None:
+                try:
+                    self._server.serve_forever()
+                except Exception:  # noqa: BLE001
+                    LOGGER.exception("Dashboard background thread crashed")
+
             self._thread = threading.Thread(
-                target=self._server.serve_forever,
+                target=_run,
                 name="web-dashboard",
                 daemon=True,
             )
