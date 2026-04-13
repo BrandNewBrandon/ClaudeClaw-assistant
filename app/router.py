@@ -1080,9 +1080,19 @@ class AssistantRouter:
 
         # ── Blocking (non-streaming) path ────────────────────────────────────────
         if self._plugin_registry is not None:
-            tool_registry = self._plugin_registry.build_tool_registry(working_directory)
+            tool_registry = self._plugin_registry.build_tool_registry(
+                working_directory,
+                agents_dir=self._config.agents_dir,
+                config_path=self._config_path,
+                router=self,
+            )
         else:
-            tool_registry = build_default_registry(working_directory)
+            tool_registry = build_default_registry(
+                working_directory,
+                agents_dir=self._config.agents_dir,
+                config_path=self._config_path,
+                router=self,
+            )
 
         # Replace run_command with an approval-gated wrapper
         _approval_store = self._approval_store
@@ -1255,9 +1265,19 @@ class AssistantRouter:
 
         # Build the tool loop + approval gate (same as blocking path)
         if self._plugin_registry is not None:
-            tool_registry = self._plugin_registry.build_tool_registry(working_directory)
+            tool_registry = self._plugin_registry.build_tool_registry(
+                working_directory,
+                agents_dir=self._config.agents_dir,
+                config_path=self._config_path,
+                router=self,
+            )
         else:
-            tool_registry = build_default_registry(working_directory)
+            tool_registry = build_default_registry(
+                working_directory,
+                agents_dir=self._config.agents_dir,
+                config_path=self._config_path,
+                router=self,
+            )
 
         _approval_store = self._approval_store
         _surface = ""  # surface not needed for the approval gating display here

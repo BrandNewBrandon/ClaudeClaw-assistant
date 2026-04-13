@@ -115,7 +115,12 @@ class ToolLoop:
         return self._max_tool_calls
 
 
-def build_default_registry(working_directory: str | Path | None = None) -> ToolRegistry:
+def build_default_registry(
+    working_directory: str | Path | None = None,
+    agents_dir: Path | None = None,
+    config_path: Path | None = None,
+    router: Any = None,
+) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(
         ToolSpec(
@@ -182,6 +187,141 @@ def build_default_registry(working_directory: str | Path | None = None) -> ToolR
         ),
         lambda args: _run_command(args, cwd=_cwd),
     )
+
+    if agents_dir is not None:
+        from .agent_provisioning import (
+            ProvisioningError,
+            bind_channel_impl,
+            list_imessage_chats_impl,
+            scaffold_agent,
+        )
+
+        _agents_dir = Path(agents_dir)
+        _config_path = Path(config_path) if config_path is not None else None
+        _router = router
+
+        def _create_agent(args: dict[str, Any]) -> str:
+            try:
+                name = str(args.get("name", "")).strip()
+                persona = str(args.get("persona", "")).strip()
+                if not name or not persona:
+                    return "Error: create_agent requires 'name' and 'persona'"
+                display_name = str(args.get("display_name") or name.title())
+                description = str(args.get("description") or "")
+                target = scaffold_agent(
+                    _agents_dir, name, display_name, persona, description
+                )
+                return (
+                    f"Agent {name!r} scaffolded at {target}.\n\n"
+                    f"Next step: bind a communication channel with\n"
+                    f"  bind_channel(agent={name!r}, channel='telegram', token='...')\n"
+                    f"Channels available: telegram, discord, slack, imessage."
+                )
+            except ProvisioningError as exc:
+                return f"Error: {exc}"
+            except Exception as exc:  # noqa: BLE001
+                return f"Error (unexpected): {exc}"
+
+        registry.register(
+            ToolSpec(
+                name="create_agent",
+                description=(
+                    "Scaffold a new sibling agent from the template. Creates agents/<name>/ "
+                    "with agent.json, AGENT.md, TOOLS.md. After creation, call bind_channel "
+                    "to wire up communication."
+                ),
+                arguments={
+                    "name": "lowercase alnum+dash, 1-32 chars (e.g. 'finance')",
+                    "persona": "persona paragraph written into the new agent's AGENT.md",
+                    "display_name": "optional human-readable name (defaults to Title-cased name)",
+                    "description": "optional short description",
+                },
+            ),
+            _create_agent,
+        )
+
+        def _bind_channel(args: dict[str, Any]) -> str:
+            try:
+                if _config_path is None:
+                    return "Error: config_path unavailable; bind_channel cannot write config"
+                agent = str(args.get("agent", "")).strip()
+                channel = str(args.get("channel", "")).strip().lower()
+                token = args.get("token")
+                app_token = args.get("app_token")
+                chat_identifier = args.get("chat_identifier")
+                result = bind_channel_impl(
+                    _config_path,
+                    agent=agent,
+                    channel=channel,
+                    token=str(token) if token else None,
+                    app_token=str(app_token) if app_token else None,
+                    chat_identifier=str(chat_identifier) if chat_identifier else None,
+                )
+                reload_msg = ""
+                if _router is not None:
+                    try:
+                        _router.add_account(result["account_id"])
+                        reload_msg = " Router hot-reloaded — new bot is live."
+                    except Exception as exc:  # noqa: BLE001
+                        reload_msg = (
+                            f" WARNING: config written but hot-reload failed: {exc}. "
+                            f"A runtime restart will pick up the change."
+                        )
+                return (
+                    f"Bound {result['channel']} channel to agent {agent!r} "
+                    f"({result['display']}). Account id: {result['account_id']}.{reload_msg}"
+                )
+            except ProvisioningError as exc:
+                return f"Error: {exc}"
+            except Exception as exc:  # noqa: BLE001
+                return f"Error (unexpected): {exc}"
+
+        registry.register(
+            ToolSpec(
+                name="bind_channel",
+                description=(
+                    "Bind a communication channel to an existing agent. Validates the token "
+                    "with the platform API, stores it in the OS keyring, updates config.json, "
+                    "and hot-reloads the router. Channels: telegram, discord, slack, imessage."
+                ),
+                arguments={
+                    "agent": "target agent name (must already exist)",
+                    "channel": "one of: telegram, discord, slack, imessage",
+                    "token": "bot token (Telegram/Discord/Slack bot token)",
+                    "app_token": "Slack app-level token (xapp-...), required when channel=slack",
+                    "chat_identifier": "iMessage chat_identifier from list_imessage_chats",
+                },
+            ),
+            _bind_channel,
+        )
+
+        def _list_imessage_chats(args: dict[str, Any]) -> str:
+            try:
+                limit_raw = args.get("limit", 20)
+                limit = int(limit_raw) if str(limit_raw).strip() else 20
+                chats = list_imessage_chats_impl(limit=limit)
+                if not chats:
+                    return "No recent iMessage chats found."
+                lines = [
+                    f"{i + 1}. {c['display_name'] or '(unnamed)'} — {c['chat_identifier']}"
+                    for i, c in enumerate(chats)
+                ]
+                return "Recent iMessage chats:\n" + "\n".join(lines)
+            except ProvisioningError as exc:
+                return f"Error: {exc}"
+
+        registry.register(
+            ToolSpec(
+                name="list_imessage_chats",
+                description=(
+                    "List recent Messages.app chats with their chat_identifier. Use before "
+                    "bind_channel(channel='imessage', chat_identifier=...). macOS only."
+                ),
+                arguments={"limit": "max chats to return (default 20)"},
+            ),
+            _list_imessage_chats,
+        )
+
     return registry
 
 

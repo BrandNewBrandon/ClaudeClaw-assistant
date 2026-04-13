@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base import SkillBase
 from ..tools import ToolRegistry, build_default_registry
@@ -42,9 +42,21 @@ class PluginRegistry:
 
     # ── Tools ─────────────────────────────────────────────────────────────────
 
-    def build_tool_registry(self, working_directory: str | Path | None = None) -> ToolRegistry:
+    def build_tool_registry(
+        self,
+        working_directory: str | Path | None = None,
+        *,
+        agents_dir: Path | None = None,
+        config_path: Path | None = None,
+        router: Any = None,
+    ) -> ToolRegistry:
         """Build a ToolRegistry containing built-in tools plus all skill tools."""
-        registry = build_default_registry(working_directory)
+        registry = build_default_registry(
+            working_directory,
+            agents_dir=agents_dir,
+            config_path=config_path,
+            router=router,
+        )
         for skill in self._available:
             try:
                 for spec, handler in skill.tools():
