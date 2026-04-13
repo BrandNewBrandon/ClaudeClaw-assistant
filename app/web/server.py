@@ -59,13 +59,22 @@ _HTML = """\
     .card-header { background: #21262d; border-bottom: 1px solid #30363d; }
     .badge-online { background: #238636; }
     .badge-offline { background: #6e7681; }
-    pre { color: #8b949e; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
+    pre { color: #c9d1d9; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
     .table { color: #e6edf3; }
-    .table thead th { border-color: #30363d; color: #8b949e; font-size: 0.8rem; text-transform: uppercase; }
-    .table tbody td { border-color: #21262d; }
-    .nav-link { color: #8b949e; }
+    .table thead th { border-color: #30363d; color: #c9d1d9; font-size: 0.8rem; text-transform: uppercase; }
+    .table tbody td { border-color: #21262d; color: #e6edf3; }
+    .nav-link { color: #c9d1d9; }
     .nav-link.active { color: #58a6ff !important; }
-    .nav-link:hover { color: #e6edf3; }
+    .nav-link:hover { color: #ffffff; }
+    /* Bootstrap muted/secondary classes default too dark on this background */
+    .text-muted, .text-secondary { color: #c9d1d9 !important; }
+    small, .small { color: #c9d1d9; }
+    label, .form-label { color: #e6edf3; }
+    .form-control, .form-select { color: #e6edf3; background-color: #161b22; border-color: #30363d; }
+    .form-control::placeholder { color: #8b949e; }
+    .card-header { color: #e6edf3; }
+    a { color: #58a6ff; }
+    a:hover { color: #79c0ff; }
     #status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     /* Chat */
     .chat-wrap { height: 420px; overflow-y: auto; background: #0d1117; border: 1px solid #30363d; border-radius: .375rem; padding: 1rem; }
@@ -74,7 +83,7 @@ _HTML = """\
     .bubble-user .bubble-inner { background: #1f6feb; color: #fff; border-radius: 1rem 1rem 0 1rem; }
     .bubble-assistant .bubble-inner { background: #21262d; color: #e6edf3; border-radius: 1rem 1rem 1rem 0; }
     .bubble-inner { padding: .5rem .85rem; display: inline-block; font-size: .9rem; white-space: pre-wrap; word-break: break-word; }
-    .bubble-name { font-size: .75rem; color: #8b949e; margin-bottom: .15rem; }
+    .bubble-name { font-size: .75rem; color: #c9d1d9; margin-bottom: .15rem; }
     .thinking-dots { letter-spacing: 3px; }
     .chat-input-ctrl { background: #161b22 !important; color: #e6edf3 !important; border-color: #30363d !important; }
     .chat-input-ctrl::placeholder { color: #6e7681; }
@@ -176,7 +185,7 @@ _HTML = """\
           <button id="gap-run-btn" class="btn btn-sm btn-primary px-3" onclick="runGapCheck()">Run</button>
         </div>
         <div id="gap-status" class="small text-muted mb-2">&nbsp;</div>
-        <pre id="gap-output" style="min-height:200px;max-height:520px;overflow-y:auto;background:#0d1117;border:1px solid #30363d;border-radius:.375rem;padding:1rem;color:#8b949e">Run Gap Check to see results here.</pre>
+        <pre id="gap-output" style="min-height:200px;max-height:520px;overflow-y:auto;background:#0d1117;border:1px solid #30363d;border-radius:.375rem;padding:1rem;color:#c9d1d9">Run Gap Check to see results here.</pre>
         <div class="small text-muted mt-2">&#x2139;&#xFE0F; Once done, copy the output and paste it into Chat for gap analysis.</div>
       </div>
     </div>
@@ -480,7 +489,7 @@ async function runGapCheck() {
 
   btn.disabled = true;
   outputEl.textContent = 'Fetching from GitHub\u2026';
-  outputEl.style.color = '#8b949e';
+  outputEl.style.color = '#c9d1d9';
   statusEl.textContent = 'Running\u2026';
 
   let jobId = null;
