@@ -14,6 +14,10 @@ class AccountConfig:
     allowed_chat_ids: list[str]
     # Platform-specific extras (e.g. Slack's app_token for Socket Mode)
     channel_config: dict[str, Any] | None = None
+    # Reference into SecretStore ("agent:channel") when token comes from keyring
+    token_ref: str | None = None
+    # Which agent this account routes to by default (used by hot-reload provisioning)
+    agent: str | None = None
 
 
 @dataclass(frozen=True)
@@ -179,12 +183,62 @@ def _parse_accounts(raw: dict[str, Any]) -> tuple[dict[str, AccountConfig], dict
         if isinstance(channel_config_raw, dict):
             channel_config = channel_config_raw
 
+        platform_lower = platform.lower()
+        token_ref = account_raw.get("token_ref")
+        raw_token = account_raw.get("token")
+        if token_ref is not None:
+            if not isinstance(token_ref, str) or not token_ref.strip():
+                raise ConfigError(f"Invalid token_ref for account: {cleaned_account_id}")
+            ref_agent, _, ref_channel = token_ref.partition(":")
+            if not ref_agent or not ref_channel:
+                raise ConfigError(
+                    f"token_ref must be 'agent:channel' for account: {cleaned_account_id}"
+                )
+            from .secret_store import SecretStore, SecretStoreError
+            try:
+                resolved = SecretStore().get(ref_agent, ref_channel)
+            except SecretStoreError as exc:
+                raise ConfigError(
+                    f"Failed resolving token_ref {token_ref!r} for account {cleaned_account_id}: {exc}"
+                ) from exc
+            if resolved is None:
+                raise ConfigError(
+                    f"No secret found in keyring for token_ref: {token_ref} (account {cleaned_account_id})"
+                )
+            token_value = resolved
+        elif isinstance(raw_token, str) and raw_token.strip():
+            token_value = raw_token
+        elif platform_lower == "imessage":
+            token_value = ""
+        else:
+            raise ConfigError(f"Missing token/token_ref for account: {cleaned_account_id}")
+
+        if platform_lower == "imessage":
+            chat_identifier = account_raw.get("chat_identifier")
+            if isinstance(chat_identifier, str) and chat_identifier.strip():
+                allowed_chat_ids = [chat_identifier.strip()]
+            else:
+                allowed_chat_ids = account_raw.get("allowed_chat_ids") or []
+                if not isinstance(allowed_chat_ids, list):
+                    raise ConfigError(
+                        f"Invalid allowed_chat_ids for iMessage account: {cleaned_account_id}"
+                    )
+        else:
+            allowed_chat_ids = _require_string_list(account_raw, "allowed_chat_ids")
+
+        agent_field_raw = account_raw.get("agent")
+        agent_field = (
+            agent_field_raw.strip() if isinstance(agent_field_raw, str) and agent_field_raw.strip() else None
+        )
+
         account = AccountConfig(
             id=cleaned_account_id,
-            platform=platform.lower(),
-            token=_require_string(account_raw, "token"),
-            allowed_chat_ids=_require_string_list(account_raw, "allowed_chat_ids"),
+            platform=platform_lower,
+            token=token_value,
+            allowed_chat_ids=allowed_chat_ids,
             channel_config=channel_config,
+            token_ref=token_ref if isinstance(token_ref, str) else None,
+            agent=agent_field,
         )
         accounts[cleaned_account_id] = account
 
@@ -192,7 +246,12 @@ def _parse_accounts(raw: dict[str, Any]) -> tuple[dict[str, AccountConfig], dict
         if routing_value is not None and not isinstance(routing_raw, dict):
             raise ConfigError(f"Invalid routing config for account: {cleaned_account_id}")
 
-        default_agent = _require_string(routing_raw, "default_agent") if routing_raw else _require_string(raw, "default_agent")
+        if routing_raw:
+            default_agent = _require_string(routing_raw, "default_agent")
+        elif agent_field:
+            default_agent = agent_field
+        else:
+            default_agent = _require_string(raw, "default_agent")
         chat_agent_map = _optional_string_map(routing_raw, "chat_agent_map") if routing_raw else {}
         routing[cleaned_account_id] = RoutingConfig(
             account_id=cleaned_account_id,
