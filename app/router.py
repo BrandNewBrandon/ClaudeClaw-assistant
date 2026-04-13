@@ -95,6 +95,8 @@ class AssistantRouter:
         self._approval_store = ApprovalStore()
         self._response_cache = ResponseCache()  # reconfigured after config load
         self._cooldown = CooldownTracker()      # reconfigured after config load
+        self._workers: dict[str, threading.Thread] = {}
+        self._accounts_lock = threading.Lock()
 
     def run(self) -> None:
         self._config = self._load_config()
@@ -379,8 +381,52 @@ class AssistantRouter:
                 daemon=True,
             )
             thread.start()
+            self._workers[account_id] = thread
             workers.append(thread)
         return workers
+
+    def add_account(self, account_id: str) -> None:
+        """Hot-add a new account from disk config: reload, build runtime, spawn worker.
+
+        Used by the bind_channel tool so the assistant can spin up new bots
+        without a runtime restart.
+        """
+        with self._accounts_lock:
+            new_config = self._load_config()
+            if account_id not in new_config.accounts:
+                raise ValueError(f"Account {account_id!r} not in reloaded config")
+            if account_id in self._account_runtimes:
+                raise ValueError(f"Account {account_id!r} already active")
+            self._config = new_config
+            account = new_config.accounts[account_id]
+            routing = new_config.routing[account_id]
+            channel = build_channel(
+                account,
+                poll_timeout_seconds=new_config.telegram_poll_timeout_seconds,
+            )
+            runtime = AccountRuntime(account=account, routing=routing, channel=channel)
+            self._account_runtimes[account_id] = runtime
+            try:
+                channel.start()
+            except Exception as exc:
+                self._account_runtimes.pop(account_id, None)
+                raise RuntimeError(f"Failed starting channel for {account_id}: {exc}") from exc
+            if self._scheduler is not None:
+                def _send(_surface: str, chat_id: str, text: str, _ch=channel) -> None:
+                    _ch.send_message(chat_id, text)
+                self._scheduler.register_sender(f"{account.platform}:{account_id}", _send)
+            thread = threading.Thread(
+                target=self._account_worker,
+                args=(account_id, runtime),
+                name=f"channel-poll-{account_id}",
+                daemon=True,
+            )
+            thread.start()
+            self._workers[account_id] = thread
+            LOGGER.info(
+                "Account hot-added account_id=%s platform=%s agent=%s",
+                account_id, account.platform, routing.default_agent,
+            )
 
     def _monitor_workers(self, worker_threads: list[threading.Thread]) -> None:
         while True:
