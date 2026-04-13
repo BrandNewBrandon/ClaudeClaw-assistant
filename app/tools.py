@@ -412,6 +412,7 @@ def _list_processes(arguments: dict[str, Any]) -> str:
             capture_output=True,
             text=True,
             timeout=10,
+            creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),  # type: ignore[attr-defined]
         )
     except subprocess.TimeoutExpired:
         return "Error: ps command timed out."
@@ -527,6 +528,7 @@ def _run_command(arguments: dict[str, Any], *, cwd: str | None = None) -> str:
             timeout=timeout,
             cwd=cwd,
             env={**os.environ},
+            creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),  # type: ignore[attr-defined]
         )
     except subprocess.TimeoutExpired:
         raise ToolError(f"Command timed out after {timeout} seconds.")

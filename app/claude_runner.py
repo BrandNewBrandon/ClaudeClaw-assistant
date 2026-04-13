@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -8,6 +9,12 @@ from pathlib import Path
 from typing import Callable
 
 from .model_runner import ModelResult, ModelRunnerError
+
+# On Windows, the runtime may be pythonw.exe (no console). Spawning a .cmd
+# shim like claude.cmd without this flag causes Windows to allocate a
+# transient cmd.exe console window that flashes on screen per call.
+# CREATE_NO_WINDOW hides it. On POSIX the flag is ignored.
+_NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0  # type: ignore[attr-defined]
 
 
 class ClaudeCodeRunner:
@@ -72,6 +79,7 @@ class ClaudeCodeRunner:
                 encoding="utf-8",
                 timeout=self._timeout_seconds,
                 errors="replace",
+                creationflags=_NO_WINDOW_FLAGS,
             )
         except subprocess.TimeoutExpired as exc:
             raise ModelRunnerError(f"Claude timed out after {self._timeout_seconds} seconds.") from exc
@@ -152,6 +160,7 @@ class ClaudeCodeRunner:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=_NO_WINDOW_FLAGS,
             )
         except OSError as exc:
             raise ModelRunnerError(f"Failed to execute Claude CLI: {exc}") from exc

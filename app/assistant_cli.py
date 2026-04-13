@@ -1254,15 +1254,31 @@ def _is_process_running(pid: int) -> bool:
     if pid <= 0:
         return False
     if os.name == "nt":
-        result = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-            capture_output=True, text=True, check=False,
-        )
-        output = (result.stdout or "").strip()
-        if result.returncode != 0 or not output:
-            return False
-        lowered = output.lower()
-        return "no tasks are running" not in lowered and "info:" not in lowered
+        # Prefer OpenProcess — no subprocess, no console allocation, no
+        # flashing window. Falls back to tasklist only if ctypes isn't
+        # available for any reason.
+        try:
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+            if not handle:
+                return False
+            exit_code = ctypes.c_ulong(0)
+            still_running = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)) != 0 and exit_code.value == 259  # STILL_ACTIVE
+            kernel32.CloseHandle(handle)
+            return bool(still_running)
+        except Exception:  # noqa: BLE001
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+            )
+            output = (result.stdout or "").strip()
+            if result.returncode != 0 or not output:
+                return False
+            lowered = output.lower()
+            return "no tasks are running" not in lowered and "info:" not in lowered
     try:
         os.kill(pid, 0)
     except OSError:

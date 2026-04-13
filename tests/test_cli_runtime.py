@@ -41,11 +41,31 @@ def test_status_runtime_reports_stale_runtime_state(tmp_path: Path, monkeypatch,
     assert "stale runtime state" in output.lower()
 
 
+def _force_tasklist_fallback(monkeypatch) -> None:
+    """Make the ctypes path raise so tests exercise the tasklist branch."""
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "ctypes":
+            raise ImportError("forced fallback")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+
 def test_is_process_running_uses_tasklist_on_windows(monkeypatch) -> None:
     monkeypatch.setattr("app.assistant_cli.os.name", "nt")
+    _force_tasklist_fallback(monkeypatch)
 
     def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout='"python.exe","1234","Console","1","10,000 K"\n', stderr='')
+        assert kwargs.get("creationflags") == subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout='"python.exe","1234","Console","1","10,000 K"\n',
+            stderr='',
+        )
 
     monkeypatch.setattr("app.assistant_cli.subprocess.run", fake_run)
 
@@ -54,9 +74,15 @@ def test_is_process_running_uses_tasklist_on_windows(monkeypatch) -> None:
 
 def test_is_process_running_handles_missing_windows_pid(monkeypatch) -> None:
     monkeypatch.setattr("app.assistant_cli.os.name", "nt")
+    _force_tasklist_fallback(monkeypatch)
 
     def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout='INFO: No tasks are running which match the specified criteria.\n', stderr='')
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout='INFO: No tasks are running which match the specified criteria.\n',
+            stderr='',
+        )
 
     monkeypatch.setattr("app.assistant_cli.subprocess.run", fake_run)
 

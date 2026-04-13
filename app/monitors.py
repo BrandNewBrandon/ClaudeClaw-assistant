@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 import threading
 import time
 from typing import Callable
+
+_NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0  # type: ignore[attr-defined]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +127,7 @@ def process_count_monitor(*, threshold: int = 500) -> MonitorFn:
         try:
             result = subprocess.run(
                 ["ps", "aux"], capture_output=True, text=True, timeout=5,
+                creationflags=_NO_WINDOW_FLAGS,
             )
             count = len(result.stdout.strip().splitlines()) - 1
             if count >= threshold:

@@ -31,6 +31,7 @@ import json
 import logging
 import re
 import shutil
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -207,6 +208,7 @@ def _install_from_github(url: str) -> tuple[str, str]:
         result = subprocess.run(
             ["git", "clone", "--depth", "1", url, str(dest)],
             capture_output=True, text=True, timeout=60,
+            creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),  # type: ignore[attr-defined]
         )
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or "git clone failed")
