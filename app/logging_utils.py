@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 from pathlib import Path
 
 from .app_paths import ensure_runtime_dirs, get_logs_file
@@ -54,11 +55,25 @@ def configure_logging(_shared_dir: Path) -> None:
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.addFilter(redaction_filter)
 
-    stream_handler = logging.StreamHandler()
-    stream_handler.addFilter(redaction_filter)
+    handlers: list[logging.Handler] = [file_handler]
+
+    # Only attach a StreamHandler when stdout is a real terminal. In
+    # detached runtime mode (_start_runtime redirects stdout=log_handle),
+    # adding a StreamHandler writes every log line to stdout a second
+    # time — and since stdout is the log file, each line lands twice.
+    # The old behavior produced ghost-duplicate lines like two identical
+    # "Callback approved" entries at the same millisecond.
+    try:
+        is_tty = bool(sys.stdout and sys.stdout.isatty())
+    except (AttributeError, ValueError):
+        is_tty = False
+    if is_tty:
+        stream_handler = logging.StreamHandler()
+        stream_handler.addFilter(redaction_filter)
+        handlers.append(stream_handler)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        handlers=[file_handler, stream_handler],
+        handlers=handlers,
     )
