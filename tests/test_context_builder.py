@@ -59,33 +59,54 @@ def test_read_cached_returns_content(tmp_path: Path) -> None:
 
 
 def test_read_cached_cache_hit_skips_disk_read(tmp_path: Path) -> None:
-    """Second call with unchanged mtime returns cached content without re-reading."""
+    """Same (mtime_ns, size) returns cached content without re-reading."""
     p = tmp_path / "AGENT.md"
     p.write_text("original", encoding="utf-8")
     builder = ContextBuilder(tmp_path)
     builder._read_cached(p)  # prime the cache
 
-    # Overwrite content on disk but preserve mtime so cache thinks nothing changed
-    mtime = p.stat().st_mtime
-    p.write_text("changed", encoding="utf-8")
-    os.utime(p, (mtime, mtime))  # restore original mtime
+    # Overwrite with same-length content and restore mtime at nanosecond
+    # precision so the (mtime_ns, size) cache key is byte-identical.
+    st = p.stat()
+    p.write_text("modified", encoding="utf-8")  # also 8 bytes
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
 
     result = builder._read_cached(p)
     assert result == "original"  # cache hit — stale disk content ignored
 
 
-def test_read_cached_cache_miss_re_reads_on_mtime_change(tmp_path: Path) -> None:
-    """When mtime changes, _read_cached re-reads the file."""
+def test_read_cached_cache_miss_re_reads_on_size_change(tmp_path: Path) -> None:
+    """When file size changes, _read_cached re-reads even if mtime is identical."""
     p = tmp_path / "AGENT.md"
     p.write_text("v1", encoding="utf-8")
     builder = ContextBuilder(tmp_path)
     assert builder._read_cached(p) == "v1"  # prime cache
 
-    # Write new content — filesystem will update mtime
-    p.write_text("v2", encoding="utf-8")
+    # Different-length content. Even if the filesystem mtime resolution is coarse
+    # and happens to match, the size guard forces a re-read.
+    st = p.stat()
+    p.write_text("v2-longer", encoding="utf-8")
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))  # pin mtime; size alone triggers miss
 
     result = builder._read_cached(p)
-    assert result == "v2"  # cache miss — new content returned
+    assert result == "v2-longer"
+
+
+def test_read_cached_cache_miss_re_reads_on_mtime_change(tmp_path: Path) -> None:
+    """When mtime_ns changes, _read_cached re-reads the file."""
+    p = tmp_path / "AGENT.md"
+    p.write_text("aa", encoding="utf-8")
+    builder = ContextBuilder(tmp_path)
+    assert builder._read_cached(p) == "aa"  # prime cache
+
+    # Same-size different content. Bump mtime forward by 2 seconds so it's
+    # unambiguous regardless of filesystem timestamp resolution.
+    p.write_text("bb", encoding="utf-8")
+    future = p.stat().st_mtime + 2
+    os.utime(p, (future, future))
+
+    result = builder._read_cached(p)
+    assert result == "bb"
 
 
 def test_read_cached_missing_file_returns_empty_string(tmp_path: Path) -> None:
@@ -121,11 +142,12 @@ def test_load_agent_context_uses_cache_on_second_call(tmp_path: Path) -> None:
     ctx1 = builder.load_agent_context("main")
     assert ctx1.agent_md == "agent persona"
 
-    # Overwrite on disk but freeze mtime so cache hit fires
+    # Overwrite on disk with same-length content and freeze mtime at ns
+    # precision so the (mtime_ns, size) cache key is byte-identical.
     p = agent_dir / "AGENT.md"
-    mtime = p.stat().st_mtime
-    p.write_text("new persona", encoding="utf-8")
-    os.utime(p, (mtime, mtime))
+    st = p.stat()
+    p.write_text("AGENT_PERSONA", encoding="utf-8")  # same 13 bytes as "agent persona"
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
 
     ctx2 = builder.load_agent_context("main")
     assert ctx2.agent_md == "agent persona"  # served from cache

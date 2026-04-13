@@ -189,15 +189,20 @@ class ContextBuilder:
         return "\n\n".join(sections) + "\n"
 
     def _read_cached(self, path: Path) -> str:
-        if not path.exists():
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
             self._file_cache.pop(path, None)
             return ""
-        mtime = path.stat().st_mtime
+        # (mtime_ns, size) key. mtime alone is unsafe on NTFS/ext4 where two
+        # writes in the same second can share an mtime; size catches the
+        # common case of content length changing.
+        key = (stat.st_mtime_ns, stat.st_size)
         cached = self._file_cache.get(path)
-        if cached is not None and cached[0] == mtime:
+        if cached is not None and cached[0] == key:
             return cached[1]
         content = path.read_text(encoding="utf-8").strip()
-        self._file_cache[path] = (mtime, content)
+        self._file_cache[path] = (key, content)
         return content
 
     def _load_recent_daily_notes(self, memory_dir: Path) -> str:
