@@ -533,23 +533,56 @@ class AssistantRouter:
             channel.answer_callback(callback.callback_id, "Command approved!")
             LOGGER.info("Callback approved account=%s chat_id=%s command=%r", account_id, callback.chat_id, command)
             working_dir = self._resolve_working_directory(active_agent)
+            # Run the command on a worker thread so the channel polling loop
+            # stays responsive. Previously this ran synchronously on the poll
+            # thread, so a slow command froze every inbound message and every
+            # other approval until it returned.
             try:
-                output = execute_shell_command(command, cwd=str(working_dir))
-            except Exception as exc:
-                output = f"Error: {exc}"
-            # Edit the approval message to show the result
-            result_text = f"Approved: {command}\n\nOutput:\n{output}" if output else f"Approved: {command}\n\n(no output)"
-            if len(result_text) > 4000:
-                result_text = result_text[:4000] + "..."
-            try:
-                channel.edit_message(callback.chat_id, callback.message_id, result_text)
+                channel.edit_message(
+                    callback.chat_id,
+                    callback.message_id,
+                    f"Approved: {command}\n\nRunning…",
+                )
             except Exception:
-                channel.send_message(callback.chat_id, result_text)
-            self._memory.append_transcript(
-                surface=surface, account_id=account_id, chat_id=callback.chat_id,
-                direction="out", agent=active_agent,
-                message_text=result_text, metadata={"kind": "command_approved"},
-            )
+                pass
+
+            def _run_and_report() -> None:
+                try:
+                    output = execute_shell_command(command, cwd=str(working_dir))
+                except Exception as exc:  # noqa: BLE001
+                    output = f"Error: {exc}"
+                result_text = (
+                    f"Approved: {command}\n\nOutput:\n{output}"
+                    if output
+                    else f"Approved: {command}\n\n(no output)"
+                )
+                if len(result_text) > 4000:
+                    result_text = result_text[:4000] + "..."
+                try:
+                    channel.edit_message(callback.chat_id, callback.message_id, result_text)
+                except Exception:
+                    try:
+                        channel.send_message(callback.chat_id, result_text)
+                    except Exception:
+                        LOGGER.exception(
+                            "Failed to report approved command result account=%s chat_id=%s",
+                            account_id,
+                            callback.chat_id,
+                        )
+                try:
+                    self._memory.append_transcript(
+                        surface=surface, account_id=account_id, chat_id=callback.chat_id,
+                        direction="out", agent=active_agent,
+                        message_text=result_text, metadata={"kind": "command_approved"},
+                    )
+                except Exception:
+                    LOGGER.exception("Transcript append failed after approved command")
+
+            threading.Thread(
+                target=_run_and_report,
+                name=f"approval-runner-{approval_id[:8]}",
+                daemon=True,
+            ).start()
         else:
             channel.answer_callback(callback.callback_id, "Command denied.")
             LOGGER.info("Callback denied account=%s chat_id=%s", account_id, callback.chat_id)
