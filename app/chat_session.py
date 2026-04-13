@@ -137,7 +137,7 @@ class TerminalChatSession:
 
         # ── Response cache ───────────────────────────────────────────────────────
         if self._cache_enabled:
-            cached = self._response_cache.get(self._chat_id, user_message)
+            cached = self._response_cache.get(self._chat_id, self._agent_name, user_message)
             if cached is not None:
                 return cached
 
@@ -239,7 +239,7 @@ class TerminalChatSession:
         final = last_output or "(no response)"
         self._cooldown.record(self._chat_id)
         if self._cache_enabled and final != "(no response)":
-            self._response_cache.set(self._chat_id, user_message, final)
+            self._response_cache.set(self._chat_id, self._agent_name, user_message, final)
         return final
 
     # ── Main REPL ─────────────────────────────────────────────────────────────
