@@ -163,3 +163,34 @@ def test_format_relevant_memory_respects_content(tmp_path: Path) -> None:
     result = builder._format_relevant_memory(snippets)
     assert "flat files" in result
     assert "terse output" in result
+
+
+def test_daily_notes_tail_cap_truncates_large_files(tmp_path: Path) -> None:
+    """Daily notes larger than DAILY_NOTE_TAIL_CHARS are truncated from the head."""
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    large_note = "HEADER\n" + "stale-line\n" * 2000 + "RECENT-ANCHOR\n"
+    (mem / "2026-04-12.md").write_text(large_note, encoding="utf-8")
+
+    builder = ContextBuilder(tmp_path)
+    result = builder._load_recent_daily_notes(mem)
+
+    assert "RECENT-ANCHOR" in result  # tail kept
+    assert "HEADER" not in result  # head dropped
+    assert "truncated" in result  # marker present
+    assert len(result) < len(large_note)
+    # Final block stays near the cap plus header + marker overhead.
+    assert len(result) < builder.DAILY_NOTE_TAIL_CHARS + 500
+
+
+def test_daily_notes_small_files_untouched(tmp_path: Path) -> None:
+    """Notes under the cap pass through verbatim with no truncation marker."""
+    mem = tmp_path / "memory"
+    mem.mkdir()
+    (mem / "2026-04-13.md").write_text("just a small note", encoding="utf-8")
+
+    builder = ContextBuilder(tmp_path)
+    result = builder._load_recent_daily_notes(mem)
+
+    assert "just a small note" in result
+    assert "truncated" not in result

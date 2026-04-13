@@ -205,6 +205,14 @@ class ContextBuilder:
         self._file_cache[path] = (key, content)
         return content
 
+    # Per-file tail cap for daily notes. Loading raw multi-KB notes into
+    # every prompt was ~6k tokens/message; the most recent activity is at
+    # the tail of each file anyway, so keep the last DAILY_NOTE_TAIL_CHARS
+    # and drop the rest. Dropped content is still reachable via the
+    # long-term relevant_memory semantic search path, so nothing is lost
+    # forever — just not reloaded on every turn.
+    DAILY_NOTE_TAIL_CHARS = 3000
+
     def _load_recent_daily_notes(self, memory_dir: Path) -> str:
         if not memory_dir.exists():
             return ""
@@ -214,7 +222,14 @@ class ContextBuilder:
         for path in files:
             if path.name.upper() == "README.MD":
                 continue
-            recent.append(f"# {path.name}\n{self._read_cached(path)}")
+            content = self._read_cached(path)
+            if len(content) > self.DAILY_NOTE_TAIL_CHARS:
+                content = (
+                    f"[...earlier in {path.name} truncated — "
+                    f"{len(content) - self.DAILY_NOTE_TAIL_CHARS} chars]\n"
+                    + content[-self.DAILY_NOTE_TAIL_CHARS:]
+                )
+            recent.append(f"# {path.name}\n{content}")
             if len(recent) >= 2:
                 break
         return "\n\n".join(recent)
