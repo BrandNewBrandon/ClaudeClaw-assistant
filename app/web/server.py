@@ -359,16 +359,37 @@ async function loadSkills() {
 let _chatPolling = null;
 
 async function loadChat() {
-  const data = await apiFetch('/api/agents');
+  // Disable Send + input until the agent dropdown is populated so the user
+  // can't race the /api/agents fetch and POST an empty agent_name.
   const sel = document.getElementById('chat-agent');
-  const prev = sel.value;
-  sel.innerHTML = '';
-  (data.agents || []).forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.name; opt.textContent = a.name;
-    if (a.name === prev) opt.selected = true;
-    sel.appendChild(opt);
-  });
+  const sendBtn = document.getElementById('chat-send-btn');
+  const inputEl = document.getElementById('chat-input');
+  const statusEl = document.getElementById('chat-status');
+  if (sendBtn) sendBtn.disabled = true;
+  if (inputEl) inputEl.disabled = true;
+  if (statusEl) statusEl.textContent = 'Loading agents…';
+
+  try {
+    const data = await apiFetch('/api/agents');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    const agents = data.agents || [];
+    agents.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.name; opt.textContent = a.name;
+      if (a.name === prev) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (agents.length === 0) {
+      if (statusEl) statusEl.textContent = 'No agents found. Create one first.';
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+    if (sendBtn) sendBtn.disabled = false;
+    if (inputEl) inputEl.disabled = false;
+  } catch (err) {
+    if (statusEl) statusEl.textContent = 'Failed to load agents: ' + err;
+  }
 }
 
 function chatAppendMsg(role, content, {id, raw} = {}) {
@@ -397,6 +418,13 @@ async function sendChatMessage() {
   const chatId = (document.getElementById('chat-session-id').value || 'web').trim();
   const sendBtn = document.getElementById('chat-send-btn');
   const statusEl = document.getElementById('chat-status');
+
+  // Defensive: if the agent dropdown is somehow still empty, refuse to send
+  // rather than asking the server to guess which agent the user meant.
+  if (!agentName) {
+    if (statusEl) statusEl.textContent = 'Agents still loading — please wait.';
+    return;
+  }
 
   inputEl.value = '';
   chatAppendMsg('user', msg);
