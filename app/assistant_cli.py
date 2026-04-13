@@ -35,7 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Check runtime setup and health")
     doctor_parser.add_argument("--fix", action="store_true", help="Attempt to auto-fix common issues")
 
-    subparsers.add_parser("start", help="Start the runtime")
+    start_parser = subparsers.add_parser("start", help="Start the runtime")
+    start_parser.add_argument(
+        "--no-tail-window",
+        action="store_true",
+        help="Don't open a new terminal window tailing runtime.log on startup",
+    )
     subparsers.add_parser("status", help="Show runtime status")
     subparsers.add_parser("stop", help="Stop the runtime")
     subparsers.add_parser("test", help="Show test command guidance")
@@ -68,7 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore.add_argument("name", help="Archived agent name")
     p_restore.add_argument("--as", dest="restored_name", default=None, help="Restore under a different name")
 
-    subparsers.add_parser("restart", help="Stop and restart the runtime")
+    restart_parser = subparsers.add_parser("restart", help="Stop and restart the runtime")
+    restart_parser.add_argument(
+        "--no-tail-window",
+        action="store_true",
+        help="Don't open a new terminal window tailing runtime.log on startup",
+    )
     subparsers.add_parser("update", help="Pull latest code from GitHub and update dependencies")
 
     logs_parser = subparsers.add_parser("logs", help="Tail the runtime log")
@@ -1565,7 +1575,55 @@ def _cmd_logs(lines: int = 50, follow: bool = True) -> int:
     return 0
 
 
-def _start_runtime(project_root: Path) -> int:
+def _open_log_tail_window(log_path: Path) -> bool:
+    """Spawn a separate terminal window tailing runtime.log live.
+
+    Returns True on success. Silently returns False on unsupported platforms
+    or if launching the terminal fails — log tailing is a convenience, not a
+    hard requirement, so callers should not treat a failure as fatal.
+    """
+    log_path_str = str(log_path)
+    title = "ClaudeClaw — Runtime Logs"
+    try:
+        if sys.platform == "darwin":
+            script = (
+                f'tell application "Terminal"\n'
+                f'  activate\n'
+                f'  do script "printf \\"\\\\033]0;{title}\\\\007\\"; '
+                f'echo Tailing runtime log: {log_path_str}; echo; '
+                f'tail -n 50 -f \\"{log_path_str}\\""\n'
+                f'end tell'
+            )
+            subprocess.Popen(["osascript", "-e", script])
+            return True
+        if os.name == "nt":
+            ps_cmd = (
+                f"$host.UI.RawUI.WindowTitle='{title}'; "
+                f"Write-Host 'Tailing runtime log: {log_path_str}'; Write-Host ''; "
+                f"Get-Content -Path '{log_path_str}' -Wait -Tail 50"
+            )
+            subprocess.Popen(
+                ["cmd", "/c", "start", title, "powershell", "-NoExit", "-Command", ps_cmd],
+                shell=False,
+            )
+            return True
+        # Linux: best-effort; try common terminals
+        for term_cmd in (
+            ["x-terminal-emulator", "-T", title, "-e", "tail", "-n", "50", "-f", log_path_str],
+            ["gnome-terminal", "--title", title, "--", "tail", "-n", "50", "-f", log_path_str],
+            ["xterm", "-T", title, "-e", f"tail -n 50 -f {log_path_str}"],
+        ):
+            try:
+                subprocess.Popen(term_cmd)
+                return True
+            except FileNotFoundError:
+                continue
+        return False
+    except Exception:
+        return False
+
+
+def _start_runtime(project_root: Path, *, open_tail_window: bool = True) -> int:
     ensure_runtime_dirs()
     _cleanup_stale_runtime_files()
     pid_path = get_runtime_pid_file()
@@ -1598,12 +1656,20 @@ def _start_runtime(project_root: Path) -> int:
     if runtime_pid and _is_process_running(runtime_pid):
         print(f"Started assistant-runtime (PID {runtime_pid}).")
         print(f"Log: {log_path}")
+        if open_tail_window:
+            if _open_log_tail_window(log_path):
+                print("Opened live log window.")
+            else:
+                print("(Could not open a separate log window — tail manually with `assistant logs`.)")
         return 0
 
     lock_pid = _read_lock_pid(lock_path)
     if lock_pid and _is_process_running(lock_pid):
         print(f"Started assistant-runtime (lock PID {lock_pid}; runtime PID not confirmed yet).")
         print(f"Log: {log_path}")
+        if open_tail_window:
+            if _open_log_tail_window(log_path):
+                print("Opened live log window.")
         return 0
 
     print("assistant-runtime launch was requested, but startup could not be confirmed yet.")
@@ -2000,14 +2066,20 @@ def main() -> int:
         return result
 
     if args.command == "start":
-        return _start_runtime(project_root)
+        return _start_runtime(
+            project_root,
+            open_tail_window=not getattr(args, "no_tail_window", False),
+        )
 
     if args.command == "stop":
         return _stop_runtime()
 
     if args.command == "restart":
         _stop_runtime()
-        return _start_runtime(project_root)
+        return _start_runtime(
+            project_root,
+            open_tail_window=not getattr(args, "no_tail_window", False),
+        )
 
     if args.command == "logs":
         return _cmd_logs(lines=args.lines, follow=not args.no_follow)
