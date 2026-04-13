@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.doctor import run_doctor
+import pytest
+
+from app.doctor import _check_dashboard, run_doctor
 
 
 def write_config(config_path: Path, project_root: Path, *, default_agent: str = "main", chat_agent_map: dict[str, str] | None = None) -> None:
@@ -92,3 +94,39 @@ def test_doctor_checks_pyautogui(tmp_path: Path) -> None:
     checks = run_doctor(config_path)
     names = [c.name for c in checks]
     assert "pyautogui" in names
+
+
+def test_doctor_dashboard_skipped_when_runtime_not_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a runtime pid file, the dashboard check is a soft skip (ok)."""
+    monkeypatch.setenv("ASSISTANT_APP_ROOT", str(tmp_path / "app-root"))
+    check = _check_dashboard()
+    assert check.status == "ok"
+    assert "skipped" in check.message.lower() or "not running" in check.message.lower()
+
+
+def test_doctor_dashboard_fails_when_pid_exists_but_port_dead(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pid file present but nothing listening on the dashboard port → fail."""
+    from app import app_paths
+
+    app_root = tmp_path / "app-root"
+    (app_root / "state").mkdir(parents=True)
+    (app_root / "state" / "runtime.pid").write_text("99999")
+    monkeypatch.setenv(app_paths.APP_ROOT_ENV, str(app_root))
+
+    # Point the check at an unused ephemeral port by monkeypatching the import
+    # path the helper uses.
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        free_port = s.getsockname()[1]
+
+    from app.web import server as web_server
+    monkeypatch.setattr(web_server, "DEFAULT_PORT", free_port, raising=True)
+
+    check = _check_dashboard()
+    assert check.status == "fail"
+    assert "nothing listens" in check.message

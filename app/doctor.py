@@ -181,4 +181,67 @@ def run_doctor(config_path: str | Path) -> list[DoctorCheck]:
         else:
             checks.append(DoctorCheck("semantic", "ok", "Semantic search disabled (fastembed not needed)."))
 
+    # ── Dashboard reachability ───────────────────────────────────────────────
+    checks.append(_check_dashboard())
+
     return checks
+
+
+def _check_dashboard() -> DoctorCheck:
+    """Verify the embedded web dashboard is listening and responding.
+
+    Skipped gracefully if the runtime PID file indicates the runtime is not
+    running — a stopped runtime wouldn't serve the dashboard anyway.
+    """
+    import socket
+    import urllib.error
+    import urllib.request
+
+    from .web.server import DEFAULT_HOST, DEFAULT_PORT
+
+    pid_path = get_runtime_pid_file()
+    if not pid_path.exists():
+        return DoctorCheck(
+            "dashboard",
+            "ok",
+            f"Runtime not running (no pid file); skipped dashboard check on {DEFAULT_HOST}:{DEFAULT_PORT}",
+        )
+
+    # TCP connect first — cheap and tells us "bound or not".
+    try:
+        with socket.create_connection((DEFAULT_HOST, DEFAULT_PORT), timeout=2):
+            pass
+    except OSError as exc:
+        return DoctorCheck(
+            "dashboard",
+            "fail",
+            f"Runtime is running but nothing listens on {DEFAULT_HOST}:{DEFAULT_PORT} ({exc}). "
+            "Dashboard thread may have crashed — check runtime.log.",
+        )
+
+    # HTTP smoke-test. A 401 is still healthy (means the server is up but
+    # requires a token) — only a non-2xx/non-401 or a transport error fails.
+    try:
+        req = urllib.request.Request(f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/api/status")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if 200 <= resp.status < 300:
+                return DoctorCheck("dashboard", "ok", f"Dashboard responding at http://{DEFAULT_HOST}:{DEFAULT_PORT}")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            return DoctorCheck(
+                "dashboard",
+                "ok",
+                f"Dashboard responding at http://{DEFAULT_HOST}:{DEFAULT_PORT} (auth required)",
+            )
+        return DoctorCheck(
+            "dashboard",
+            "warn",
+            f"Dashboard returned HTTP {exc.code} on /api/status",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return DoctorCheck(
+            "dashboard",
+            "warn",
+            f"Dashboard reachable on TCP but /api/status failed: {exc}",
+        )
+    return DoctorCheck("dashboard", "ok", f"Dashboard responding at http://{DEFAULT_HOST}:{DEFAULT_PORT}")
