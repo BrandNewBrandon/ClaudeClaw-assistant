@@ -695,6 +695,50 @@ def _api_skills() -> dict[str, Any]:
         return {"skills": [], "error": str(exc)}
 
 
+class ChatAgentError(Exception):
+    """Raised when the dashboard chat endpoint cannot resolve a valid agent."""
+
+
+def resolve_chat_agent(
+    *,
+    requested: str | None,
+    default_agent: str,
+    agents_dir: Path,
+) -> str:
+    """Resolve which agent the dashboard chat should use.
+
+    Replaces the old hardcoded ``or "main"`` fallback so installs whose
+    default agent is not named ``main`` (e.g. ``Avi Nuge`` on the Windows
+    PC) work correctly when the browser POSTs an empty ``agent_name``
+    during a frontend race.
+
+    Args:
+        requested: The ``agent_name`` field from the POST body. May be
+            ``None``, empty, or whitespace.
+        default_agent: ``AppConfig.default_agent`` — the config-level
+            fallback, used when ``requested`` is empty.
+        agents_dir: Path to the ``agents/`` directory for existence check.
+
+    Returns:
+        The resolved agent name.
+
+    Raises:
+        ChatAgentError: If the resolved agent directory does not exist on
+            disk. Surfaces a clean message to the dashboard instead of
+            letting a ``FileNotFoundError`` explode inside the tool loop.
+    """
+    candidate = (requested or "").strip() or default_agent
+    if not candidate:
+        raise ChatAgentError("No agent name provided and no default_agent in config")
+    target = Path(agents_dir) / candidate
+    if not target.is_dir():
+        raise ChatAgentError(
+            f"Agent {candidate!r} not found at {target}. "
+            f"Check config.default_agent or pass a valid agent_name."
+        )
+    return candidate
+
+
 def _api_chat_post(
     body: dict[str, Any],
     chat_sessions: dict[str, Any],
@@ -703,12 +747,27 @@ def _api_chat_post(
     config_path: Path,
 ) -> dict[str, Any]:
     """Start a chat job in a background thread. Returns {job_id}."""
-    agent_name = str(body.get("agent_name", "")).strip() or "main"
+    from ..config import load_config
+
     chat_id = str(body.get("chat_id", "")).strip() or "web"
     message = str(body.get("message", "")).strip()
-
     if not message:
         return {"error": "message is required"}
+
+    try:
+        app_cfg = load_config(config_path)
+    except Exception as exc:
+        LOGGER.exception("Failed to load config for dashboard chat")
+        return {"error": f"Failed to load config: {exc}"}
+
+    try:
+        agent_name = resolve_chat_agent(
+            requested=body.get("agent_name"),
+            default_agent=app_cfg.default_agent,
+            agents_dir=app_cfg.agents_dir,
+        )
+    except ChatAgentError as exc:
+        return {"error": str(exc)}
 
     with chat_lock:
         existing = chat_sessions.get(chat_id)
