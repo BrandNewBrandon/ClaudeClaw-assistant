@@ -678,7 +678,7 @@ def _api_skills() -> dict[str, Any]:
         from ..plugins.loader import build_plugin_registry
         registry = build_plugin_registry()
         skills = []
-        for skill in registry.all_skills():
+        for skill in registry.all_skills:
             tool_handlers = skill.tools()
             cmd_map = skill.commands()
             skills.append({
