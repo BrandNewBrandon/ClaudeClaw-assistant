@@ -1,14 +1,37 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .model_runner import ModelResult, ModelRunnerError
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _log_usage(source: str, usage: dict[str, Any] | None) -> None:
+    """Log Claude Code token usage on a single line so it can be grep/summed.
+
+    Format: `Token usage source=<path> input=<n> output=<n> cache_read=<n> cache_creation=<n>`.
+    Zero extra API cost — this is data Claude Code already returns in the
+    response; we just pull the `usage` field out of the result event instead
+    of dropping it on the floor.
+    """
+    if not isinstance(usage, dict):
+        return
+    LOGGER.info(
+        "Token usage source=%s input=%s output=%s cache_read=%s cache_creation=%s",
+        source,
+        usage.get("input_tokens", 0),
+        usage.get("output_tokens", 0),
+        usage.get("cache_read_input_tokens", 0),
+        usage.get("cache_creation_input_tokens", 0),
+    )
 
 # On Windows, the runtime may be pythonw.exe (no console). Spawning a .cmd
 # shim like claude.cmd without this flag causes Windows to allocate a
@@ -96,6 +119,15 @@ class ClaudeCodeRunner:
 
         if use_json:
             stdout, new_session_id = self._parse_json_output(raw_stdout, stderr)
+            # Also pull the usage block out of the same JSON dict so we can
+            # track token spend. Best-effort — parse failures already handled
+            # in _parse_json_output so a second parse here is cheap.
+            try:
+                parsed = json.loads(raw_stdout) if raw_stdout else None
+                if isinstance(parsed, dict):
+                    _log_usage("run_prompt", parsed.get("usage"))
+            except json.JSONDecodeError:
+                pass
         else:
             stdout = raw_stdout
             new_session_id = None
@@ -214,6 +246,7 @@ class ClaudeCodeRunner:
                     sid = event.get("session_id")
                     if isinstance(sid, str) and sid.strip():
                         new_session_id = sid.strip()
+                    _log_usage("run_prompt_streaming", event.get("usage"))
                     break  # nothing useful after result
 
             # Drain stderr
