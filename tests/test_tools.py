@@ -88,10 +88,14 @@ def test_list_processes_returns_process_table() -> None:
 
 def test_list_processes_filter_narrows_results() -> None:
     registry = build_default_registry()
+    unfiltered = registry.execute(ToolCall(name="list_processes", arguments={}))
     # Filter by "python" — current test process guarantees at least one match
-    result = registry.execute(ToolCall(name="list_processes", arguments={"filter": "python"}))
-    assert result.ok is True
-    assert "python" in result.output.lower()
+    filtered = registry.execute(ToolCall(name="list_processes", arguments={"filter": "python"}))
+    assert filtered.ok is True
+    # Filter matched something (not the "no processes" message)
+    assert "no processes matching" not in filtered.output.lower()
+    # Filter actually narrowed the results vs unfiltered
+    assert len(filtered.output.splitlines()) < len(unfiltered.output.splitlines())
 
 
 def test_list_processes_filter_no_match_returns_message() -> None:
